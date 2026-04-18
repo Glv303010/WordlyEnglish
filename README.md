@@ -1,17 +1,53 @@
-# wordly
+# WordlyEnglish
 
-A new Flutter project.
+Мобильное приложение для изучения английских и испанских слов. Интерактивный словарь с тренажёром для эффективного запоминания.
 
-## Getting Started
+## 📱 О приложении
 
-This project is a starting point for a Flutter application.
+WordlyEnglish помогает расширить словарный запас через:
+- 📖 Словарь с алфавитным указателем и фильтрацией по темам
+- 🎯 Тренажёр для проверки знаний с системой прогресса
+- 📊 Отслеживание сложности слов на основе ваших ответов
+- 🔄 Адаптивный интерфейс для книжной и альбомной ориентации
 
-A few resources to get you started if this is your first Flutter project:
+## 🚀 Возможности
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+### Словарь
+- Просмотр слов по алфавиту
+- Фильтрация по темам (Животные, Еда, Одежда, Транспорт)
+- Переключение между английским и испанским языками
+- Отображение уровня сложности каждого слова
+- Быстрая навигация по алфавиту
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+### Тренажёр
+- Выбор нескольких тем для тренировки
+- Адаптивный подбор слов (сложные слова появляются чаще)
+- Мгновенная проверка перевода
+- Система прогресса: слова становятся легче при правильных ответах
+- Автоматическое обновление сложности слов
+
+## 🛠 Технологии
+
+- Flutter - кросс-платформенная разработка
+- SQLite - локальное хранение данных
+- sqflite - работа с базой данных
+
+## 📥 Установка
+
+### Для пользователей
+1. Скачайте APK файл из [релизов](https://github.com/Glv303010/WordlyEnglish/releases/edit/mobileapp)
+2. Установите приложение на Android устройство
+3. Разрешите установку из неизвестных источников (если требуется)
+
+### Для разработчиков
+
+```bash
+
+# Перейти в папку проекта
+cd wordly
+
+# Установить зависимости
+flutter pub get
+
+# Запустить приложение
+flutter run
