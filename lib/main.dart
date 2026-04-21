@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart';
-import 'dart:io';
+
+// Импорт для базы данных
+import 'database/database_service.dart';
 
 void main() {
   runApp(const LanguageLearningApp());
@@ -36,6 +35,8 @@ class Word {
   int wrongCount;
   double difficulty;
   DateTime? lastReviewed;
+  int? streak;
+  DateTime? nextReviewDate;
 
   Word({
     this.id,
@@ -47,6 +48,8 @@ class Word {
     this.wrongCount = 0,
     this.difficulty = 0.5,
     this.lastReviewed,
+    this.streak = 0,
+    this.nextReviewDate,
   });
 
   Map<String, dynamic> toMap() {
@@ -60,6 +63,8 @@ class Word {
       'wrongCount': wrongCount,
       'difficulty': difficulty,
       'lastReviewed': lastReviewed?.toIso8601String(),
+      'streak': streak,
+      'nextReviewDate': nextReviewDate?.toIso8601String(),
     };
   }
 
@@ -70,295 +75,24 @@ class Word {
       translation: map['translation'],
       language: map['language'],
       topic: map['topic'],
-      correctCount: map['correctCount'],
-      wrongCount: map['wrongCount'],
-      difficulty: map['difficulty'],
+      correctCount: map['correctCount'] ?? 0,
+      wrongCount: map['wrongCount'] ?? 0,
+      difficulty: map['difficulty'] ?? 0.5,
       lastReviewed: map['lastReviewed'] != null
           ? DateTime.parse(map['lastReviewed'])
+          : null,
+      streak: map['streak'] ?? 0,
+      nextReviewDate: map['nextReviewDate'] != null
+          ? DateTime.parse(map['nextReviewDate'])
           : null,
     );
   }
 }
 
-// Сервис для работы с SQLite
-class DatabaseService {
-  static final DatabaseService _instance = DatabaseService._internal();
-  factory DatabaseService() => _instance;
-  DatabaseService._internal();
+// ============================================================
+// ГЛАВНАЯ СТРАНИЦА
+// ============================================================
 
-  static Database? _database;
-
-  Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDatabase();
-    return _database!;
-  }
-
-  Future<Database> _initDatabase() async {
-    Directory documentsDirectory = await getApplicationDocumentsDirectory();
-    String path = join(documentsDirectory.path, 'words.db');
-
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: _onCreate,
-    );
-  }
-
-  Future<void> _onCreate(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE words(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        word TEXT NOT NULL,
-        translation TEXT NOT NULL,
-        language TEXT NOT NULL,
-        topic TEXT NOT NULL,
-        correctCount INTEGER DEFAULT 0,
-        wrongCount INTEGER DEFAULT 0,
-        difficulty REAL DEFAULT 0.5,
-        lastReviewed TEXT
-      )
-    ''');
-
-    await _insertInitialData(db);
-  }
-
-  Future<void> _insertInitialData(Database db) async {
-    List<Map<String, dynamic>> initialWords = [
-      // === ЖИВОТНЫЕ - АНГЛИЙСКИЕ ===
-      {'word': 'Cat', 'translation': 'Кошка', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Dog', 'translation': 'Собака', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Hamster', 'translation': 'Хомяк', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Rabbit', 'translation': 'Кролик', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Lion', 'translation': 'Лев', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Tiger', 'translation': 'Тигр', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Elephant', 'translation': 'Слон', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Giraffe', 'translation': 'Жираф', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Monkey', 'translation': 'Обезьяна', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Bear', 'translation': 'Медведь', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Wolf', 'translation': 'Волк', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Fox', 'translation': 'Лиса', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Snake', 'translation': 'Змея', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Eagle', 'translation': 'Орел', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Dolphin', 'translation': 'Дельфин', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Whale', 'translation': 'Кит', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Shark', 'translation': 'Акула', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Penguin', 'translation': 'Пингвин', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Kangaroo', 'translation': 'Кенгуру', 'language': 'en', 'topic': 'Животные'},
-      {'word': 'Zebra', 'translation': 'Зебра', 'language': 'en', 'topic': 'Животные'},
-
-      // === ЖИВОТНЫЕ - ИСПАНСКИЕ ===
-      {'word': 'Gato', 'translation': 'Кошка', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Perro', 'translation': 'Собака', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Hámster', 'translation': 'Хомяк', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Conejo', 'translation': 'Кролик', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'León', 'translation': 'Лев', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Tigre', 'translation': 'Тигр', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Elefante', 'translation': 'Слон', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Jirafa', 'translation': 'Жираф', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Mono', 'translation': 'Обезьяна', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Oso', 'translation': 'Медведь', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Lobo', 'translation': 'Волк', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Zorro', 'translation': 'Лиса', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Serpiente', 'translation': 'Змея', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Águila', 'translation': 'Орел', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Delfín', 'translation': 'Дельфин', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Ballena', 'translation': 'Кит', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Tiburón', 'translation': 'Акула', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Pingüino', 'translation': 'Пингвин', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Canguro', 'translation': 'Кенгуру', 'language': 'es', 'topic': 'Животные'},
-      {'word': 'Cebra', 'translation': 'Зебра', 'language': 'es', 'topic': 'Животные'},
-
-      // === ЕДА - АНГЛИЙСКАЯ ===
-      {'word': 'Apple', 'translation': 'Яблоко', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Banana', 'translation': 'Банан', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Orange', 'translation': 'Апельсин', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Strawberry', 'translation': 'Клубника', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Grape', 'translation': 'Виноград', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Watermelon', 'translation': 'Арбуз', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Pineapple', 'translation': 'Ананас', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Mango', 'translation': 'Манго', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Peach', 'translation': 'Персик', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Pear', 'translation': 'Груша', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Potato', 'translation': 'Картофель', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Tomato', 'translation': 'Помидор', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Cucumber', 'translation': 'Огурец', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Carrot', 'translation': 'Морковь', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Meat', 'translation': 'Мясо', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Chicken', 'translation': 'Курица', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Fish', 'translation': 'Рыба', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Milk', 'translation': 'Молоко', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Bread', 'translation': 'Хлеб', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Cheese', 'translation': 'Сыр', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Egg', 'translation': 'Яйцо', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Rice', 'translation': 'Рис', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Pasta', 'translation': 'Паста', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Soup', 'translation': 'Суп', 'language': 'en', 'topic': 'Еда'},
-      {'word': 'Salad', 'translation': 'Салат', 'language': 'en', 'topic': 'Еда'},
-
-      // === ЕДА - ИСПАНСКАЯ ===
-      {'word': 'Manzana', 'translation': 'Яблоко', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Plátano', 'translation': 'Банан', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Naranja', 'translation': 'Апельсин', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Fresa', 'translation': 'Клубника', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Uva', 'translation': 'Виноград', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Sandía', 'translation': 'Арбуз', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Piña', 'translation': 'Ананас', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Mango', 'translation': 'Манго', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Melocotón', 'translation': 'Персик', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Pera', 'translation': 'Груша', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Patata', 'translation': 'Картофель', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Tomate', 'translation': 'Помидор', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Pepino', 'translation': 'Огурец', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Zanahoria', 'translation': 'Морковь', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Carne', 'translation': 'Мясо', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Pollo', 'translation': 'Курица', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Pescado', 'translation': 'Рыба', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Leche', 'translation': 'Молоко', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Pan', 'translation': 'Хлеб', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Queso', 'translation': 'Сыр', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Huevo', 'translation': 'Яйцо', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Arroz', 'translation': 'Рис', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Pasta', 'translation': 'Паста', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Sopa', 'translation': 'Суп', 'language': 'es', 'topic': 'Еда'},
-      {'word': 'Ensalada', 'translation': 'Салат', 'language': 'es', 'topic': 'Еда'},
-
-      // === ОДЕЖДА - АНГЛИЙСКАЯ ===
-      {'word': 'Shirt', 'translation': 'Рубашка', 'language': 'en', 'topic': 'Одежда'},
-      {'word': 'T-shirt', 'translation': 'Футболка', 'language': 'en', 'topic': 'Одежда'},
-      {'word': 'Pants', 'translation': 'Штаны', 'language': 'en', 'topic': 'Одежда'},
-      {'word': 'Jeans', 'translation': 'Джинсы', 'language': 'en', 'topic': 'Одежда'},
-      {'word': 'Dress', 'translation': 'Платье', 'language': 'en', 'topic': 'Одежда'},
-      {'word': 'Skirt', 'translation': 'Юбка', 'language': 'en', 'topic': 'Одежда'},
-      {'word': 'Jacket', 'translation': 'Куртка', 'language': 'en', 'topic': 'Одежда'},
-      {'word': 'Coat', 'translation': 'Пальто', 'language': 'en', 'topic': 'Одежда'},
-      {'word': 'Hat', 'translation': 'Шляпа', 'language': 'en', 'topic': 'Одежда'},
-      {'word': 'Shoes', 'translation': 'Обувь', 'language': 'en', 'topic': 'Одежда'},
-      {'word': 'Boots', 'translation': 'Ботинки', 'language': 'en', 'topic': 'Одежда'},
-      {'word': 'Socks', 'translation': 'Носки', 'language': 'en', 'topic': 'Одежда'},
-      {'word': 'Sweater', 'translation': 'Свитер', 'language': 'en', 'topic': 'Одежда'},
-      {'word': 'Scarf', 'translation': 'Шарф', 'language': 'en', 'topic': 'Одежда'},
-      {'word': 'Gloves', 'translation': 'Перчатки', 'language': 'en', 'topic': 'Одежда'},
-
-      // === ОДЕЖДА - ИСПАНСКАЯ ===
-      {'word': 'Camisa', 'translation': 'Рубашка', 'language': 'es', 'topic': 'Одежда'},
-      {'word': 'Camiseta', 'translation': 'Футболка', 'language': 'es', 'topic': 'Одежда'},
-      {'word': 'Pantalones', 'translation': 'Штаны', 'language': 'es', 'topic': 'Одежда'},
-      {'word': 'Vaqueros', 'translation': 'Джинсы', 'language': 'es', 'topic': 'Одежда'},
-      {'word': 'Vestido', 'translation': 'Платье', 'language': 'es', 'topic': 'Одежда'},
-      {'word': 'Falda', 'translation': 'Юбка', 'language': 'es', 'topic': 'Одежда'},
-      {'word': 'Chaqueta', 'translation': 'Куртка', 'language': 'es', 'topic': 'Одежда'},
-      {'word': 'Abrigo', 'translation': 'Пальто', 'language': 'es', 'topic': 'Одежда'},
-      {'word': 'Sombrero', 'translation': 'Шляпа', 'language': 'es', 'topic': 'Одежда'},
-      {'word': 'Zapatos', 'translation': 'Обувь', 'language': 'es', 'topic': 'Одежда'},
-      {'word': 'Botas', 'translation': 'Ботинки', 'language': 'es', 'topic': 'Одежда'},
-      {'word': 'Calcetines', 'translation': 'Носки', 'language': 'es', 'topic': 'Одежда'},
-      {'word': 'Suéter', 'translation': 'Свитер', 'language': 'es', 'topic': 'Одежда'},
-      {'word': 'Bufanda', 'translation': 'Шарф', 'language': 'es', 'topic': 'Одежда'},
-      {'word': 'Guantes', 'translation': 'Перчатки', 'language': 'es', 'topic': 'Одежда'},
-
-      // === ТРАНСПОРТ - АНГЛИЙСКИЙ ===
-      {'word': 'Car', 'translation': 'Машина', 'language': 'en', 'topic': 'Транспорт'},
-      {'word': 'Bus', 'translation': 'Автобус', 'language': 'en', 'topic': 'Транспорт'},
-      {'word': 'Train', 'translation': 'Поезд', 'language': 'en', 'topic': 'Транспорт'},
-      {'word': 'Plane', 'translation': 'Самолет', 'language': 'en', 'topic': 'Транспорт'},
-      {'word': 'Bicycle', 'translation': 'Велосипед', 'language': 'en', 'topic': 'Транспорт'},
-      {'word': 'Motorcycle', 'translation': 'Мотоцикл', 'language': 'en', 'topic': 'Транспорт'},
-      {'word': 'Truck', 'translation': 'Грузовик', 'language': 'en', 'topic': 'Транспорт'},
-      {'word': 'Ship', 'translation': 'Корабль', 'language': 'en', 'topic': 'Транспорт'},
-      {'word': 'Boat', 'translation': 'Лодка', 'language': 'en', 'topic': 'Транспорт'},
-      {'word': 'Helicopter', 'translation': 'Вертолет', 'language': 'en', 'topic': 'Транспорт'},
-      {'word': 'Taxi', 'translation': 'Такси', 'language': 'en', 'topic': 'Транспорт'},
-      {'word': 'Subway', 'translation': 'Метро', 'language': 'en', 'topic': 'Транспорт'},
-      {'word': 'Tram', 'translation': 'Трамвай', 'language': 'en', 'topic': 'Транспорт'},
-
-      // === ТРАНСПОРТ - ИСПАНСКИЙ ===
-      {'word': 'Coche', 'translation': 'Машина', 'language': 'es', 'topic': 'Транспорт'},
-      {'word': 'Autobús', 'translation': 'Автобус', 'language': 'es', 'topic': 'Транспорт'},
-      {'word': 'Tren', 'translation': 'Поезд', 'language': 'es', 'topic': 'Транспорт'},
-      {'word': 'Avión', 'translation': 'Самолет', 'language': 'es', 'topic': 'Транспорт'},
-      {'word': 'Bicicleta', 'translation': 'Велосипед', 'language': 'es', 'topic': 'Транспорт'},
-      {'word': 'Moto', 'translation': 'Мотоцикл', 'language': 'es', 'topic': 'Транспорт'},
-      {'word': 'Camión', 'translation': 'Грузовик', 'language': 'es', 'topic': 'Транспорт'},
-      {'word': 'Barco', 'translation': 'Корабль', 'language': 'es', 'topic': 'Транспорт'},
-      {'word': 'Bote', 'translation': 'Лодка', 'language': 'es', 'topic': 'Транспорт'},
-      {'word': 'Helicóptero', 'translation': 'Вертолет', 'language': 'es', 'topic': 'Транспорт'},
-      {'word': 'Taxi', 'translation': 'Такси', 'language': 'es', 'topic': 'Транспорт'},
-      {'word': 'Metro', 'translation': 'Метро', 'language': 'es', 'topic': 'Транспорт'},
-      {'word': 'Tranvía', 'translation': 'Трамвай', 'language': 'es', 'topic': 'Транспорт'},
-    ];
-
-    for (var word in initialWords) {
-      await db.insert('words', word);
-    }
-  }
-
-  Future<List<Word>> getAllWords() async {
-    Database db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('words');
-    return List.generate(maps.length, (i) => Word.fromMap(maps[i]));
-  }
-
-  Future<List<Word>> getWordsByTopic(String topic, {String language = 'en'}) async {
-    Database db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'words',
-      where: 'topic = ? AND language = ?',
-      whereArgs: [topic, language],
-    );
-    return List.generate(maps.length, (i) => Word.fromMap(maps[i]));
-  }
-
-  Future<List<String>> getTopics() async {
-    Database db = await database;
-    final result = await db.rawQuery('SELECT DISTINCT topic FROM words');
-    List<String> allTopics = result.map((e) => e['topic'] as String).toList();
-
-    List<String> russianTopics = [];
-    if (allTopics.contains('Животные')) russianTopics.add('Животные');
-    if (allTopics.contains('Еда')) russianTopics.add('Еда');
-    if (allTopics.contains('Одежда')) russianTopics.add('Одежда');
-    if (allTopics.contains('Транспорт')) russianTopics.add('Транспорт');
-
-    return russianTopics;
-  }
-
-  Future<void> updateWordProgress(Word word, bool isCorrect) async {
-    Database db = await database;
-
-    if (isCorrect) {
-      word.correctCount++;
-      word.difficulty = (word.difficulty - 0.1).clamp(0.0, 1.0);
-    } else {
-      word.wrongCount++;
-      word.difficulty = (word.difficulty + 0.2).clamp(0.0, 1.0);
-    }
-
-    word.lastReviewed = DateTime.now();
-
-    await db.update(
-      'words',
-      word.toMap(),
-      where: 'id = ?',
-      whereArgs: [word.id],
-    );
-  }
-
-  Future<List<Word>> getWordsForTraining(String topic, {int limit = 20}) async {
-    Database db = await database;
-
-    final List<Map<String, dynamic>> maps = await db.rawQuery('''
-      SELECT * FROM words 
-      WHERE topic = ? 
-      ORDER BY difficulty DESC, lastReviewed ASC 
-      LIMIT ?
-    ''', [topic, limit]);
-
-    return List.generate(maps.length, (i) => Word.fromMap(maps[i]));
-  }
-}
-
-// Главная страница
 class MainPage extends StatelessWidget {
   const MainPage({super.key});
 
@@ -618,7 +352,10 @@ class MainPage extends StatelessWidget {
   }
 }
 
-// Страница словаря
+// ============================================================
+// СТРАНИЦА СЛОВАРЯ
+// ============================================================
+
 class DictionaryPage extends StatefulWidget {
   const DictionaryPage({super.key});
 
@@ -678,6 +415,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
     final Map<String, List<Word>> grouped = {};
 
     for (var word in _allWords) {
+      if (word.word.isEmpty) continue;
       String firstLetter = word.word[0].toUpperCase();
       if (!grouped.containsKey(firstLetter)) {
         grouped[firstLetter] = [];
@@ -732,8 +470,8 @@ class _DictionaryPageState extends State<DictionaryPage> {
           DropdownButton<String>(
             value: _selectedLanguage,
             items: const [
-              DropdownMenuItem(value: 'en', child: Text('Английский')),
-              DropdownMenuItem(value: 'es', child: Text('Испанский')),
+              DropdownMenuItem(value: 'en', child: Text('🇬🇧 Английский')),
+              DropdownMenuItem(value: 'es', child: Text('🇪🇸 Испанский')),
             ],
             onChanged: (value) {
               setState(() {
@@ -747,7 +485,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
       ),
       body: Column(
         children: [
-          if (_showTopicFilter)
+          if (_showTopicFilter && _topics.isNotEmpty)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               color: Colors.grey.shade100,
@@ -797,7 +535,36 @@ class _DictionaryPageState extends State<DictionaryPage> {
               ),
             ),
           Expanded(
-            child: Stack(
+            child: _allWords.isEmpty
+                ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.search_off,
+                    size: 64,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Нет слов для отображения',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Выберите другую тему или язык',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            )
+                : Stack(
               children: [
                 Padding(
                   padding: EdgeInsets.only(
@@ -853,6 +620,13 @@ class _DictionaryPageState extends State<DictionaryPage> {
                                 fontSize: isLandscape ? 12.0 : 14.0,
                               ),
                             ),
+                            trailing: word.difficulty > 0.7
+                                ? Icon(
+                              Icons.warning_amber_rounded,
+                              color: Colors.orange,
+                              size: 20,
+                            )
+                                : null,
                           ))
                         ],
                       );
@@ -927,10 +701,12 @@ class _DictionaryPageState extends State<DictionaryPage> {
       ),
     );
   }
-
 }
 
-// Страница тренажера
+// ============================================================
+// СТРАНИЦА ТРЕНАЖЁРА
+// ============================================================
+
 class TrainerPage extends StatefulWidget {
   const TrainerPage({super.key});
 
@@ -994,11 +770,10 @@ class _TrainerPageState extends State<TrainerPage> {
     List<Word> allWords = [];
 
     for (var topic in selectedTopics) {
-      var words = await _dbService.getWordsForTraining(topic, limit: 20);
-      allWords.addAll(words);
+      var words = await _dbService.getWordsForTraining(topic, limit: 30);
+      allWords.addAll(words.where((word) => word.language == _selectedLanguage));
     }
 
-    allWords = allWords.where((word) => word.language == _selectedLanguage).toList();
     allWords.shuffle();
     _trainingWords = allWords.take(20).toList();
 
@@ -1132,7 +907,9 @@ class _TrainerPageState extends State<TrainerPage> {
                       ),
                       const SizedBox(height: 20),
                       Text(
-                        'Выберите темы и начните тренировку',
+                        _topics.isEmpty
+                            ? 'Нет доступных тем\nДобавьте слова в базу данных'
+                            : 'Выберите темы и начните тренировку',
                         style: TextStyle(
                           fontSize: 18,
                           color: Colors.grey.shade600,
@@ -1141,7 +918,7 @@ class _TrainerPageState extends State<TrainerPage> {
                       ),
                       const SizedBox(height: 30),
                       ElevatedButton.icon(
-                        onPressed: hasSelectedTopics() ? _startTraining : null,
+                        onPressed: _topics.isEmpty ? null : (hasSelectedTopics() ? _startTraining : null),
                         icon: const Icon(Icons.play_arrow),
                         label: const Text('НАЧАТЬ'),
                         style: ElevatedButton.styleFrom(
@@ -1394,7 +1171,9 @@ class _TrainerPageState extends State<TrainerPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Выберите темы и начните тренировку',
+            _topics.isEmpty
+                ? 'Нет доступных тем\nДобавьте слова в базу данных'
+                : 'Выберите темы и начните тренировку',
             style: TextStyle(
               fontSize: 13,
               color: Colors.grey.shade600,
@@ -1403,7 +1182,7 @@ class _TrainerPageState extends State<TrainerPage> {
           ),
           const SizedBox(height: 12),
           ElevatedButton.icon(
-            onPressed: hasSelectedTopics() ? _startTraining : null,
+            onPressed: _topics.isEmpty ? null : (hasSelectedTopics() ? _startTraining : null),
             icon: const Icon(Icons.play_arrow, size: 16),
             label: const Text('НАЧАТЬ', style: TextStyle(fontSize: 13)),
             style: ElevatedButton.styleFrom(
@@ -1586,6 +1365,22 @@ class _TrainerPageState extends State<TrainerPage> {
   }
 
   Widget _buildTopicsPanel(bool isLandscape) {
+    if (_topics.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            'Нет доступных тем\nДобавьте слова через words_data.dart',
+            style: TextStyle(
+              fontSize: isLandscape ? 11 : 14,
+              color: Colors.grey.shade600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
     if (isLandscape) {
       return Padding(
         padding: const EdgeInsets.all(10.0),
@@ -1806,7 +1601,10 @@ class _TrainerPageState extends State<TrainerPage> {
   }
 }
 
-// Страница выбора перевода
+// ============================================================
+// СТРАНИЦА ВЫБОРА ПЕРЕВОДА
+// ============================================================
+
 class MultipleChoicePage extends StatefulWidget {
   const MultipleChoicePage({super.key});
 
@@ -2062,7 +1860,9 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
                       ),
                       const SizedBox(height: 20),
                       Text(
-                        'Выберите темы и начните тренировку',
+                        _topics.isEmpty
+                            ? 'Нет доступных тем\nДобавьте слова в базу данных'
+                            : 'Выберите темы и начните тренировку',
                         style: TextStyle(
                           fontSize: 18,
                           color: Colors.grey.shade600,
@@ -2071,7 +1871,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
                       ),
                       const SizedBox(height: 30),
                       ElevatedButton.icon(
-                        onPressed: hasSelectedTopics() ? _startTraining : null,
+                        onPressed: _topics.isEmpty ? null : (hasSelectedTopics() ? _startTraining : null),
                         icon: const Icon(Icons.play_arrow),
                         label: const Text('НАЧАТЬ'),
                         style: ElevatedButton.styleFrom(
@@ -2310,7 +2110,9 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Выберите темы и начните тренировку',
+            _topics.isEmpty
+                ? 'Нет доступных тем\nДобавьте слова в базу данных'
+                : 'Выберите темы и начните тренировку',
             style: TextStyle(
               fontSize: 13,
               color: Colors.grey.shade600,
@@ -2319,7 +2121,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
           ),
           const SizedBox(height: 12),
           ElevatedButton.icon(
-            onPressed: hasSelectedTopics() ? _startTraining : null,
+            onPressed: _topics.isEmpty ? null : (hasSelectedTopics() ? _startTraining : null),
             icon: const Icon(Icons.play_arrow, size: 16),
             label: const Text('НАЧАТЬ', style: TextStyle(fontSize: 13)),
             style: ElevatedButton.styleFrom(
@@ -2514,6 +2316,22 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
   }
 
   Widget _buildTopicsPanel(bool isLandscape) {
+    if (_topics.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            'Нет доступных тем\nДобавьте слова через words_data.dart',
+            style: TextStyle(
+              fontSize: isLandscape ? 11 : 14,
+              color: Colors.grey.shade600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
     if (isLandscape) {
       return Padding(
         padding: const EdgeInsets.all(10.0),
@@ -2734,7 +2552,10 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
   }
 }
 
-// Страница обратного перевода (с русского на иностранный)
+// ============================================================
+// СТРАНИЦА ОБРАТНОГО ПЕРЕВОДА (с русского на иностранный)
+// ============================================================
+
 class ReverseTranslationPage extends StatefulWidget {
   const ReverseTranslationPage({super.key});
 
@@ -2944,7 +2765,9 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                       ),
                       const SizedBox(height: 20),
                       Text(
-                        'Выберите темы и начните тренировку',
+                        _topics.isEmpty
+                            ? 'Нет доступных тем\nДобавьте слова в базу данных'
+                            : 'Выберите темы и начните тренировку',
                         style: TextStyle(
                           fontSize: 18,
                           color: Colors.grey.shade600,
@@ -2953,7 +2776,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                       ),
                       const SizedBox(height: 30),
                       ElevatedButton.icon(
-                        onPressed: hasSelectedTopics() ? _startTraining : null,
+                        onPressed: _topics.isEmpty ? null : (hasSelectedTopics() ? _startTraining : null),
                         icon: const Icon(Icons.play_arrow),
                         label: const Text('НАЧАТЬ'),
                         style: ElevatedButton.styleFrom(
@@ -3207,7 +3030,9 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Выберите темы и начните тренировку',
+            _topics.isEmpty
+                ? 'Нет доступных тем\nДобавьте слова в базу данных'
+                : 'Выберите темы и начните тренировку',
             style: TextStyle(
               fontSize: 13,
               color: Colors.grey.shade600,
@@ -3216,7 +3041,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
           ),
           const SizedBox(height: 12),
           ElevatedButton.icon(
-            onPressed: hasSelectedTopics() ? _startTraining : null,
+            onPressed: _topics.isEmpty ? null : (hasSelectedTopics() ? _startTraining : null),
             icon: const Icon(Icons.play_arrow, size: 16),
             label: const Text('НАЧАТЬ', style: TextStyle(fontSize: 13)),
             style: ElevatedButton.styleFrom(
@@ -3399,6 +3224,22 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
   }
 
   Widget _buildTopicsPanel(bool isLandscape) {
+    if (_topics.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            'Нет доступных тем\nДобавьте слова через words_data.dart',
+            style: TextStyle(
+              fontSize: isLandscape ? 11 : 14,
+              color: Colors.grey.shade600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
     if (isLandscape) {
       return Padding(
         padding: const EdgeInsets.all(10.0),
