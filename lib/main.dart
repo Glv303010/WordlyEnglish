@@ -188,6 +188,18 @@ class MainPage extends StatelessWidget {
               );
             },
           ),
+          const SizedBox(height: 16),
+          _buildMenuButton(
+            context,
+            title: 'ПРОГРЕСС',
+            color: Colors.teal,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProgressPage()),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -3456,6 +3468,1011 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ============================================================
+// СТРАНИЦА ПРОГРЕССА
+// ============================================================
+
+class ProgressPage extends StatefulWidget {
+  const ProgressPage({super.key});
+
+  @override
+  State<ProgressPage> createState() => _ProgressPageState();
+}
+
+class _ProgressPageState extends State<ProgressPage> {
+  final DatabaseService _dbService = DatabaseService();
+
+  List<String> _topics = [];
+  String _selectedLanguage = 'en';
+  final Map<String, Map<String, dynamic>> _topicStats = {};
+  Map<String, dynamic> _overallStats = {};
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+
+    _topics = await _dbService.getTopics();
+    _overallStats = await _dbService.getOverallStatistics();
+
+    for (var topic in _topics) {
+      var stats = await _dbService.getTopicStatistics(topic, _selectedLanguage);
+      _topicStats[topic] = stats;
+    }
+
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _changeLanguage(String language) async {
+    setState(() {
+      _selectedLanguage = language;
+      _topicStats.clear();
+      _isLoading = true;
+    });
+
+    for (var topic in _topics) {
+      var stats = await _dbService.getTopicStatistics(topic, _selectedLanguage);
+      _topicStats[topic] = stats;
+    }
+
+    setState(() => _isLoading = false);
+  }
+
+  String _getDifficultyLevel(double difficulty) {
+    if (difficulty < 0.3) return 'Легко';
+    if (difficulty < 0.7) return 'Средне';
+    return 'Сложно';
+  }
+
+  Color _getDifficultyColor(double difficulty) {
+    if (difficulty < 0.3) return Colors.green;
+    if (difficulty < 0.7) return Colors.orange;
+    return Colors.red;
+  }
+
+  Future<void> _resetTopicProgress(String topic) async {
+    // Получаем все слова в теме
+    final words = await _dbService.getWordsByTopic(topic, language: _selectedLanguage);
+
+    if (words.isEmpty) return;
+
+    // Показываем диалог подтверждения
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Сброс прогресса'),
+        content: Text(
+          'Вы уверены, что хотите сбросить прогресс для темы "$topic"?\n\n'
+              'Все статистические данные (правильные/неправильные ответы, сложность, серии) будут удалены.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('ОТМЕНА'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('СБРОСИТЬ'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // Сбрасываем прогресс для каждого слова
+    for (var word in words) {
+      word.correctCount = 0;
+      word.wrongCount = 0;
+      word.difficulty = 0.5;
+      word.lastReviewed = null;
+      word.streak = 0;
+      word.nextReviewDate = null;
+      await _dbService.updateWord(word);
+    }
+
+    // Обновляем статистику
+    await _loadData();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Прогресс по теме "$topic" сброшен'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  Future<void> _resetAllProgress() async {
+    // Показываем диалог подтверждения
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Сброс ВСЕГО прогресса'),
+        content: const Text(
+          '⚠️ ВНИМАНИЕ! ⚠️\n\n'
+              'Вы уверены, что хотите сбросить ВЕСЬ прогресс?\n\n'
+              'Будут удалены все данные о:\n'
+              '• правильных и неправильных ответах\n'
+              '• сложности слов\n'
+              '• сериях правильных ответов\n'
+              '• датах последнего повторения\n\n'
+              'Это действие НЕЛЬЗЯ отменить!',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('ОТМЕНА'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('СБРОСИТЬ ВСЁ'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    await _dbService.resetAllProgress();
+    await _loadData();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Весь прогресс сброшен'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isLandscape = mediaQuery.orientation == Orientation.landscape;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('ПРОГРЕСС'),
+        actions: [
+          // Кнопка сброса всего прогресса
+          IconButton(
+            icon: const Icon(Icons.delete_sweep, color: Colors.red),
+            onPressed: _resetAllProgress,
+            tooltip: 'Сбросить весь прогресс',
+          ),
+          DropdownButton<String>(
+            value: _selectedLanguage,
+            items: const [
+              DropdownMenuItem(value: 'en', child: Text('🇬🇧 Английский')),
+              DropdownMenuItem(value: 'es', child: Text('🇪🇸 Испанский')),
+            ],
+            onChanged: (value) {
+              if (value != null) _changeLanguage(value);
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _buildContent(isLandscape),
+    );
+  }
+
+  Widget _buildContent(bool isLandscape) {
+    final totalWords = _overallStats['totalWords'] ?? 0;
+    final totalCorrect = _overallStats['totalCorrect'] ?? 0;
+    final totalWrong = _overallStats['totalWrong'] ?? 0;
+    final learnedWords = _overallStats['learnedWords'] ?? 0;
+    final hardWords = _overallStats['hardWords'] ?? 0;
+    final avgDifficulty = _overallStats['avgDifficulty'] ?? 0.5;
+
+    final progressPercent = totalWords > 0 ? (learnedWords / totalWords * 100) : 0;
+    final accuracyPercent = (totalCorrect + totalWrong) > 0
+        ? (totalCorrect / (totalCorrect + totalWrong) * 100)
+        : 0;
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Общая статистика
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.teal.shade400, Colors.teal.shade700],
+            ),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.insights, color: Colors.white, size: 28),
+                  const SizedBox(width: 12),
+                  Text(
+                    'ОБЩАЯ СТАТИСТИКА',
+                    style: TextStyle(
+                      fontSize: isLandscape ? 14 : 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildStatItem(
+                    '📚',
+                    '$totalWords',
+                    'всего слов',
+                    isLandscape,
+                  ),
+                  _buildStatItem(
+                    '✅',
+                    '$learnedWords',
+                    'изучено',
+                    isLandscape,
+                  ),
+                  _buildStatItem(
+                    '⚠️',
+                    '$hardWords',
+                    'сложных',
+                    isLandscape,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Общий прогресс',
+                        style: TextStyle(
+                          fontSize: isLandscape ? 12 : 14,
+                          color: Colors.white70,
+                        ),
+                      ),
+                      Text(
+                        '${progressPercent.toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          fontSize: isLandscape ? 12 : 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: progressPercent / 100,
+                    backgroundColor: Colors.white30,
+                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Точность ответов',
+                        style: TextStyle(
+                          fontSize: isLandscape ? 12 : 14,
+                          color: Colors.white70,
+                        ),
+                      ),
+                      Text(
+                        '${accuracyPercent.toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          fontSize: isLandscape ? 12 : 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: accuracyPercent / 100,
+                    backgroundColor: Colors.white30,
+                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Средняя сложность: ${_getDifficultyLevel(avgDifficulty)}',
+                    style: TextStyle(
+                      fontSize: isLandscape ? 11 : 13,
+                      color: Colors.white70,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _getDifficultyColor(avgDifficulty).withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${(avgDifficulty * 100).toInt()}%',
+                      style: TextStyle(
+                        fontSize: isLandscape ? 11 : 13,
+                        fontWeight: FontWeight.bold,
+                        color: _getDifficultyColor(avgDifficulty),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        // Заголовок тем
+        Row(
+          children: [
+            const Icon(Icons.folder, color: Colors.teal),
+            const SizedBox(width: 8),
+            Text(
+              'ТЕМЫ',
+              style: TextStyle(
+                fontSize: isLandscape ? 16 : 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.teal.shade800,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '(${_topics.length})',
+              style: TextStyle(
+                fontSize: isLandscape ? 13 : 16,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Список тем
+        if (_topics.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Column(
+                children: [
+                  Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Нет доступных тем',
+                    style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Добавьте слова через words_data.dart',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          ..._topics.map((topic) => _buildTopicCard(topic, isLandscape)),
+      ],
+    );
+  }
+
+  Widget _buildStatItem(String icon, String value, String label, bool isLandscape) {
+    return Column(
+      children: [
+        Text(icon, style: const TextStyle(fontSize: 24)),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: isLandscape ? 20 : 28,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: isLandscape ? 10 : 12,
+            color: Colors.white70,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTopicCard(String topic, bool isLandscape) {
+    final stats = _topicStats[topic] ?? {};
+    final totalWords = stats['totalWords'] ?? 0;
+    final learnedWords = stats['learnedWords'] ?? 0;
+    final avgDifficulty = stats['avgDifficulty'] ?? 0.5;
+    final totalCorrect = stats['totalCorrect'] ?? 0;
+    final totalWrong = stats['totalWrong'] ?? 0;
+
+    final progressPercent = totalWords > 0 ? (learnedWords / totalWords * 100) : 0;
+    final accuracyPercent = (totalCorrect + totalWrong) > 0
+        ? (totalCorrect / (totalCorrect + totalWrong) * 100)
+        : 0;
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TopicProgressPage(
+              topic: topic,
+              language: _selectedLanguage,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.shade100,
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                // Иконка темы (первая буква)
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.teal.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Text(
+                      topic.isNotEmpty ? topic[0] : '?',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.teal.shade700,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        topic,
+                        style: TextStyle(
+                          fontSize: isLandscape ? 16 : 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'Выучено: $learnedWords из $totalWords',
+                        style: TextStyle(
+                          fontSize: isLandscape ? 11 : 13,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getDifficultyColor(avgDifficulty).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _getDifficultyLevel(avgDifficulty),
+                    style: TextStyle(
+                      fontSize: isLandscape ? 11 : 13,
+                      color: _getDifficultyColor(avgDifficulty),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                // Кнопка сброса прогресса по теме
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                  onPressed: () => _resetTopicProgress(topic),
+                  tooltip: 'Сбросить прогресс по теме',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+                const Icon(Icons.chevron_right, color: Colors.grey),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Прогресс',
+                            style: TextStyle(
+                              fontSize: isLandscape ? 11 : 13,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          Text(
+                            '${progressPercent.toStringAsFixed(1)}%',
+                            style: TextStyle(
+                              fontSize: isLandscape ? 11 : 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.teal,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      LinearProgressIndicator(
+                        value: progressPercent / 100,
+                        backgroundColor: Colors.grey.shade200,
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.teal),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Точность',
+                            style: TextStyle(
+                              fontSize: isLandscape ? 11 : 13,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          Text(
+                            '${accuracyPercent.toStringAsFixed(1)}%',
+                            style: TextStyle(
+                              fontSize: isLandscape ? 11 : 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.teal,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      LinearProgressIndicator(
+                        value: accuracyPercent / 100,
+                        backgroundColor: Colors.grey.shade200,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.teal.shade300),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// СТРАНИЦА ПРОГРЕССА ПО КОНКРЕТНОЙ ТЕМЕ
+// ============================================================
+
+class TopicProgressPage extends StatefulWidget {
+  final String topic;
+  final String language;
+
+  const TopicProgressPage({
+    super.key,
+    required this.topic,
+    required this.language,
+  });
+
+  @override
+  State<TopicProgressPage> createState() => _TopicProgressPageState();
+}
+
+class _TopicProgressPageState extends State<TopicProgressPage> {
+  final DatabaseService _dbService = DatabaseService();
+  List<Word> _words = [];
+  bool _isLoading = true;
+  String _sortBy = 'word';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWords();
+  }
+
+  Future<void> _loadWords() async {
+    setState(() => _isLoading = true);
+    _words = await _dbService.getWordsByTopic(widget.topic, language: widget.language);
+    _sortWords();
+    setState(() => _isLoading = false);
+  }
+
+  void _sortWords() {
+    switch (_sortBy) {
+      case 'word':
+        _words.sort((a, b) => a.word.compareTo(b.word));
+        break;
+      case 'difficulty':
+        _words.sort((a, b) => b.difficulty.compareTo(a.difficulty));
+        break;
+      case 'correctCount':
+        _words.sort((a, b) => b.correctCount.compareTo(a.correctCount));
+        break;
+      case 'wrongCount':
+        _words.sort((a, b) => b.wrongCount.compareTo(a.wrongCount));
+        break;
+    }
+  }
+
+  String _getDifficultyLevel(double difficulty) {
+    if (difficulty < 0.3) return 'Легко';
+    if (difficulty < 0.7) return 'Средне';
+    return 'Сложно';
+  }
+
+  Color _getDifficultyColor(double difficulty) {
+    if (difficulty < 0.3) return Colors.green;
+    if (difficulty < 0.7) return Colors.orange;
+    return Colors.red;
+  }
+
+  IconData _getMasteryIcon(double difficulty) {
+    if (difficulty < 0.3) return Icons.emoji_events;
+    if (difficulty < 0.7) return Icons.trending_up;
+    return Icons.warning_amber_rounded;
+  }
+
+  Future<void> _resetWordProgress(Word word) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Сброс прогресса слова'),
+        content: Text(
+          'Вы уверены, что хотите сбросить прогресс для слова "${word.word}"?\n\n'
+              'Будут удалены: правильные/неправильные ответы, сложность, серия.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('ОТМЕНА'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('СБРОСИТЬ'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    word.correctCount = 0;
+    word.wrongCount = 0;
+    word.difficulty = 0.5;
+    word.lastReviewed = null;
+    word.streak = 0;
+    word.nextReviewDate = null;
+    await _dbService.updateWord(word);
+
+    await _loadWords();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Прогресс для "${word.word}" сброшен'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  Future<void> _resetAllWordsInTopic() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Сброс прогресса в теме "${widget.topic}"'),
+        content: const Text(
+          'Вы уверены, что хотите сбросить прогресс для ВСЕХ слов в этой теме?\n\n'
+              'Это действие НЕЛЬЗЯ отменить!',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('ОТМЕНА'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('СБРОСИТЬ ВСЁ'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    for (var word in _words) {
+      word.correctCount = 0;
+      word.wrongCount = 0;
+      word.difficulty = 0.5;
+      word.lastReviewed = null;
+      word.streak = 0;
+      word.nextReviewDate = null;
+      await _dbService.updateWord(word);
+    }
+
+    await _loadWords();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Весь прогресс в теме "${widget.topic}" сброшен'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalWords = _words.length;
+    final learnedWords = _words.where((w) => w.difficulty < 0.3).length;
+    final totalCorrect = _words.fold<int>(0, (sum, w) => sum + w.correctCount);
+    final totalWrong = _words.fold<int>(0, (sum, w) => sum + w.wrongCount);
+    final progressPercent = totalWords > 0 ? (learnedWords / totalWords * 100) : 0;
+    final accuracyPercent = (totalCorrect + totalWrong) > 0
+        ? (totalCorrect / (totalCorrect + totalWrong) * 100)
+        : 0;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.topic),
+        actions: [
+          // Кнопка сброса всех слов в теме
+          IconButton(
+            icon: const Icon(Icons.delete_sweep, color: Colors.red),
+            onPressed: _resetAllWordsInTopic,
+            tooltip: 'Сбросить прогресс всех слов в теме',
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.sort),
+            onSelected: (value) {
+              setState(() {
+                _sortBy = value;
+                _sortWords();
+              });
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'word', child: Text('По алфавиту')),
+              const PopupMenuItem(value: 'difficulty', child: Text('По сложности')),
+              const PopupMenuItem(value: 'correctCount', child: Text('По правильным ответам')),
+              const PopupMenuItem(value: 'wrongCount', child: Text('По ошибкам')),
+            ],
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+        children: [
+          // Компактная статистика (фиксированная вверху, но маленькая)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: Colors.teal.shade50,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildCompactStat('📚', '$totalWords'),
+                _buildCompactStat('✅', '$learnedWords'),
+                _buildCompactStat('📊', '${progressPercent.toStringAsFixed(0)}%'),
+                _buildCompactStat('✓', '$totalCorrect'),
+                _buildCompactStat('✗', '$totalWrong'),
+                _buildCompactStat('🎯', '${accuracyPercent.toStringAsFixed(0)}%'),
+              ],
+            ),
+          ),
+          // Список слов (занимает всё оставшееся место)
+          Expanded(
+            child: _words.isEmpty
+                ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Нет слов в этой теме',
+                    style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            )
+                : ListView.builder(
+              itemCount: _words.length,
+              itemBuilder: (context, index) {
+                final word = _words[index];
+                final totalAttempts = word.correctCount + word.wrongCount;
+                final accuracy = totalAttempts > 0
+                    ? (word.correctCount / totalAttempts * 100).round()
+                    : 0;
+
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: _getDifficultyColor(word.difficulty).withValues(alpha: 0.2),
+                      child: Icon(
+                        _getMasteryIcon(word.difficulty),
+                        color: _getDifficultyColor(word.difficulty),
+                        size: 20,
+                      ),
+                    ),
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            word.word,
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _getDifficultyColor(word.difficulty).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            _getDifficultyLevel(word.difficulty),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _getDifficultyColor(word.difficulty),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          word.translation,
+                          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.check_circle, size: 14, color: Colors.green.shade400),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${word.correctCount}',
+                              style: TextStyle(fontSize: 12, color: Colors.green.shade600),
+                            ),
+                            const SizedBox(width: 12),
+                            Icon(Icons.cancel, size: 14, color: Colors.red.shade400),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${word.wrongCount}',
+                              style: TextStyle(fontSize: 12, color: Colors.red.shade600),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Точность: $accuracy%',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (word.streak != null && word.streak! > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.local_fire_department, size: 14, color: Colors.amber),
+                                const SizedBox(width: 2),
+                                Text(
+                                  '${word.streak}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.amber.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                          onPressed: () => _resetWordProgress(word),
+                          tooltip: 'Сбросить прогресс слова',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactStat(String icon, String value) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(icon, style: const TextStyle(fontSize: 14)),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal),
+        ),
+      ],
     );
   }
 }
