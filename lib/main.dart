@@ -111,13 +111,17 @@ class MainPage extends StatelessWidget {
     );
   }
 
+  // ============================================================
+  // ВЕРТИКАЛЬНЫЙ РЕЖИМ (ПОРТРЕТ)
+  // ============================================================
+
   Widget _buildPortraitLayout(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 20),
+          // Шапка
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -140,11 +144,15 @@ class MainPage extends StatelessWidget {
               const SizedBox(width: 40),
             ],
           ),
+
           const SizedBox(height: 40),
+
+          // ========== КНОПКА СЛОВАРЬ (СИНЯЯ) ==========
           _buildMenuButton(
             context,
             title: 'СЛОВАРЬ',
             color: Colors.blue,
+            icon: Icons.menu_book,
             onTap: () {
               Navigator.push(
                 context,
@@ -152,11 +160,21 @@ class MainPage extends StatelessWidget {
               );
             },
           ),
-          const SizedBox(height: 16),
-          _buildMenuButton(
+
+          const SizedBox(height: 30),
+
+          // ========== РАЗДЕЛИТЕЛЬ ==========
+          _buildDividerWithLabel('ТРЕНИРОВКИ'),
+
+          const SizedBox(height: 20),
+
+          // ========== ТРИ КНОПКИ ТРЕНИРОВОК (ЗЕЛЁНЫЙ ФОН, КРАСНЫЙ ТЕКСТ) ==========
+          _buildTrainingButton(
             context,
             title: 'ТРЕНАЖЁР',
-            color: Colors.green,
+            textColor: Colors.red,
+            backgroundColor: Colors.green.shade700,
+            icon: Icons.edit_note,
             onTap: () {
               Navigator.push(
                 context,
@@ -165,10 +183,13 @@ class MainPage extends StatelessWidget {
             },
           ),
           const SizedBox(height: 16),
-          _buildMenuButton(
+
+          _buildTrainingButton(
             context,
             title: 'ВЫБОР ПЕРЕВОДА',
-            color: Colors.orange,
+            textColor: Colors.red,
+            backgroundColor: Colors.green.shade700,
+            icon: Icons.quiz,
             onTap: () {
               Navigator.push(
                 context,
@@ -177,10 +198,13 @@ class MainPage extends StatelessWidget {
             },
           ),
           const SizedBox(height: 16),
-          _buildMenuButton(
+
+          _buildTrainingButton(
             context,
             title: 'С РУССКОГО',
-            color: Colors.purple,
+            textColor: Colors.red,
+            backgroundColor: Colors.green.shade700,
+            icon: Icons.translate,
             onTap: () {
               Navigator.push(
                 context,
@@ -188,11 +212,20 @@ class MainPage extends StatelessWidget {
               );
             },
           ),
-          const SizedBox(height: 16),
+
+          const SizedBox(height: 30),
+
+          // ========== РАЗДЕЛИТЕЛЬ (без надписи) ==========
+          _buildSimpleDivider(),
+
+          const SizedBox(height: 20),
+
+          // ========== КНОПКА ПРОГРЕСС (БИРЮЗОВАЯ) ==========
           _buildMenuButton(
             context,
             title: 'ПРОГРЕСС',
             color: Colors.teal,
+            icon: Icons.insights,
             onTap: () {
               Navigator.push(
                 context,
@@ -200,17 +233,24 @@ class MainPage extends StatelessWidget {
               );
             },
           ),
+
+          const SizedBox(height: 20),
         ],
       ),
     );
   }
 
+  // ============================================================
+  // ГОРИЗОНТАЛЬНЫЙ РЕЖИМ (ЛАНДШАФТ)
+  // ============================================================
+
   Widget _buildLandscapeLayout(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Шапка
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -233,7 +273,10 @@ class MainPage extends StatelessWidget {
               const SizedBox(width: 40),
             ],
           ),
-          const SizedBox(height: 16),
+
+          const SizedBox(height: 20),
+
+          // ========== ПЕРВАЯ СТРОКА: СЛОВАРЬ + ПРОГРЕСС ==========
           Row(
             children: [
               Expanded(
@@ -241,6 +284,7 @@ class MainPage extends StatelessWidget {
                   context,
                   title: 'СЛОВАРЬ',
                   color: Colors.blue,
+                  icon: Icons.menu_book,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -253,8 +297,37 @@ class MainPage extends StatelessWidget {
               Expanded(
                 child: _buildCompactMenuButton(
                   context,
+                  title: 'ПРОГРЕСС',
+                  color: Colors.teal,
+                  icon: Icons.insights,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ProgressPage()),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // ========== РАЗДЕЛИТЕЛЬ ==========
+          _buildCompactDividerWithLabel('ТРЕНИРОВКИ'),
+
+          const SizedBox(height: 16),
+
+          // ========== ВТОРАЯ СТРОКА: ТРИ КНОПКИ (ЗЕЛЁНЫЙ ФОН, КРАСНЫЙ ТЕКСТ) ==========
+          Row(
+            children: [
+              Expanded(
+                child: _buildCompactTrainingButton(
+                  context,
                   title: 'ТРЕНАЖЁР',
-                  color: Colors.green,
+                  textColor: Colors.red,
+                  backgroundColor: Colors.green.shade700,
+                  icon: Icons.edit_note,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -263,16 +336,14 @@ class MainPage extends StatelessWidget {
                   },
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
+              const SizedBox(width: 12),
               Expanded(
-                child: _buildCompactMenuButton(
+                child: _buildCompactTrainingButton(
                   context,
                   title: 'ВЫБОР ПЕРЕВОДА',
-                  color: Colors.orange,
+                  textColor: Colors.red,
+                  backgroundColor: Colors.green.shade700,
+                  icon: Icons.quiz,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -283,10 +354,12 @@ class MainPage extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _buildCompactMenuButton(
+                child: _buildCompactTrainingButton(
                   context,
                   title: 'С РУССКОГО',
-                  color: Colors.purple,
+                  textColor: Colors.red,
+                  backgroundColor: Colors.green.shade700,
+                  icon: Icons.translate,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -297,67 +370,259 @@ class MainPage extends StatelessWidget {
               ),
             ],
           ),
+
+          const SizedBox(height: 16),
+
+          // ========== НИЖНИЙ РАЗДЕЛИТЕЛЬ ==========
+          _buildCompactSimpleDivider(),
         ],
       ),
+    );
+  }
+
+  // ============================================================
+  // ВИДЖЕТЫ ДЛЯ ВЕРТИКАЛЬНОГО РЕЖИМА
+  // ============================================================
+
+  Widget _buildDividerWithLabel(String label) {
+    return Row(
+      children: [
+        Expanded(
+          child: Divider(
+            color: Colors.grey.shade300,
+            thickness: 1,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade500,
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Divider(
+            color: Colors.grey.shade300,
+            thickness: 1,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSimpleDivider() {
+    return Divider(
+      color: Colors.grey.shade200,
+      thickness: 1,
     );
   }
 
   Widget _buildMenuButton(BuildContext context, {
     required String title,
     required Color color,
+    required IconData icon,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        height: 100,
+        height: 80,
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: color, width: 2),
         ),
-        child: Center(
-          child: Text(
-            title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 32,
               color: color,
-              letterSpacing: 1.5,
+            ),
+            const SizedBox(width: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTrainingButton(BuildContext context, {
+    required String title,
+    required Color textColor,
+    required Color backgroundColor,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        height: 70,
+        decoration: BoxDecoration(
+          color: backgroundColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: backgroundColor.withValues(alpha: 0.3), width: 1.5),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 28,
+              color: textColor,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // ВИДЖЕТЫ ДЛЯ ГОРИЗОНТАЛЬНОГО РЕЖИМА
+  // ============================================================
+
+  Widget _buildCompactDividerWithLabel(String label) {
+    return Row(
+      children: [
+        Expanded(
+          child: Divider(
+            color: Colors.grey.shade300,
+            thickness: 1,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade500,
+              letterSpacing: 1,
             ),
           ),
         ),
-      ),
+        Expanded(
+          child: Divider(
+            color: Colors.grey.shade300,
+            thickness: 1,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactSimpleDivider() {
+    return Divider(
+      color: Colors.grey.shade200,
+      thickness: 1,
     );
   }
 
   Widget _buildCompactMenuButton(BuildContext context, {
     required String title,
     required Color color,
+    required IconData icon,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 70,
+        height: 65,
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(15),
           border: Border.all(color: color, width: 2),
         ),
-        child: Center(
-          child: Text(
-            title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 24,
               color: color,
-              letterSpacing: 1.5,
             ),
-          ),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: color,
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactTrainingButton(BuildContext context, {
+    required String title,
+    required Color textColor,
+    required Color backgroundColor,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 55,
+        decoration: BoxDecoration(
+          color: backgroundColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: backgroundColor.withValues(alpha: 0.3), width: 1.5),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: textColor,
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: textColor,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
