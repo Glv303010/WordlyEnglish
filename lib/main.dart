@@ -111,17 +111,12 @@ class MainPage extends StatelessWidget {
     );
   }
 
-  // ============================================================
-  // ВЕРТИКАЛЬНЫЙ РЕЖИМ (ПОРТРЕТ)
-  // ============================================================
-
   Widget _buildPortraitLayout(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Шапка
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -144,10 +139,7 @@ class MainPage extends StatelessWidget {
               const SizedBox(width: 40),
             ],
           ),
-
           const SizedBox(height: 40),
-
-          // ========== КНОПКА СЛОВАРЬ (СИНЯЯ) ==========
           _buildMenuButton(
             context,
             title: 'СЛОВАРЬ',
@@ -160,15 +152,9 @@ class MainPage extends StatelessWidget {
               );
             },
           ),
-
           const SizedBox(height: 30),
-
-          // ========== РАЗДЕЛИТЕЛЬ ==========
           _buildDividerWithLabel('ТРЕНИРОВКИ'),
-
           const SizedBox(height: 20),
-
-          // ========== ТРИ КНОПКИ ТРЕНИРОВОК (ЗЕЛЁНЫЙ ФОН, КРАСНЫЙ ТЕКСТ) ==========
           _buildTrainingButton(
             context,
             title: 'ТРЕНАЖЁР',
@@ -183,7 +169,6 @@ class MainPage extends StatelessWidget {
             },
           ),
           const SizedBox(height: 16),
-
           _buildTrainingButton(
             context,
             title: 'ВЫБОР ПЕРЕВОДА',
@@ -198,7 +183,6 @@ class MainPage extends StatelessWidget {
             },
           ),
           const SizedBox(height: 16),
-
           _buildTrainingButton(
             context,
             title: 'С РУССКОГО',
@@ -212,15 +196,9 @@ class MainPage extends StatelessWidget {
               );
             },
           ),
-
           const SizedBox(height: 30),
-
-          // ========== РАЗДЕЛИТЕЛЬ (без надписи) ==========
           _buildSimpleDivider(),
-
           const SizedBox(height: 20),
-
-          // ========== КНОПКА ПРОГРЕСС (БИРЮЗОВАЯ) ==========
           _buildMenuButton(
             context,
             title: 'ПРОГРЕСС',
@@ -233,16 +211,11 @@ class MainPage extends StatelessWidget {
               );
             },
           ),
-
           const SizedBox(height: 20),
         ],
       ),
     );
   }
-
-  // ============================================================
-  // ГОРИЗОНТАЛЬНЫЙ РЕЖИМ (ЛАНДШАФТ)
-  // ============================================================
 
   Widget _buildLandscapeLayout(BuildContext context) {
     return SingleChildScrollView(
@@ -250,7 +223,6 @@ class MainPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Шапка
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -273,10 +245,7 @@ class MainPage extends StatelessWidget {
               const SizedBox(width: 40),
             ],
           ),
-
           const SizedBox(height: 20),
-
-          // ========== ПЕРВАЯ СТРОКА: СЛОВАРЬ + ПРОГРЕСС ==========
           Row(
             children: [
               Expanded(
@@ -310,15 +279,9 @@ class MainPage extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 20),
-
-          // ========== РАЗДЕЛИТЕЛЬ ==========
           _buildCompactDividerWithLabel('ТРЕНИРОВКИ'),
-
           const SizedBox(height: 16),
-
-          // ========== ВТОРАЯ СТРОКА: ТРИ КНОПКИ (ЗЕЛЁНЫЙ ФОН, КРАСНЫЙ ТЕКСТ) ==========
           Row(
             children: [
               Expanded(
@@ -370,19 +333,12 @@ class MainPage extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 16),
-
-          // ========== НИЖНИЙ РАЗДЕЛИТЕЛЬ ==========
           _buildCompactSimpleDivider(),
         ],
       ),
     );
   }
-
-  // ============================================================
-  // ВИДЖЕТЫ ДЛЯ ВЕРТИКАЛЬНОГО РЕЖИМА
-  // ============================================================
 
   Widget _buildDividerWithLabel(String label) {
     return Row(
@@ -504,10 +460,6 @@ class MainPage extends StatelessWidget {
       ),
     );
   }
-
-  // ============================================================
-  // ВИДЖЕТЫ ДЛЯ ГОРИЗОНТАЛЬНОГО РЕЖИМА
-  // ============================================================
 
   Widget _buildCompactDividerWithLabel(String label) {
     return Row(
@@ -985,7 +937,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
 // ============================================================
 
 class TrainerPage extends StatefulWidget {
-  const TrainerPage({super.key});
+  const TrainerPage({super.key, this.selectedTopic});
+
+  final String? selectedTopic;
 
   @override
   State<TrainerPage> createState() => _TrainerPageState();
@@ -1025,6 +979,14 @@ class _TrainerPageState extends State<TrainerPage> {
     setState(() {
       for (var topic in _topics) {
         _selectedTopics[topic] = true;
+      }
+
+      if (widget.selectedTopic != null && _topics.contains(widget.selectedTopic)) {
+        for (var topic in _topics) {
+          _selectedTopics[topic] = (topic == widget.selectedTopic);
+        }
+        _showTopicsPanel = false;
+        _startTraining();
       }
     });
   }
@@ -1883,7 +1845,9 @@ class _TrainerPageState extends State<TrainerPage> {
 // ============================================================
 
 class MultipleChoicePage extends StatefulWidget {
-  const MultipleChoicePage({super.key});
+  const MultipleChoicePage({super.key, this.selectedTopic});
+
+  final String? selectedTopic;
 
   @override
   State<MultipleChoicePage> createState() => _MultipleChoicePageState();
@@ -1918,6 +1882,14 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
     setState(() {
       for (var topic in _topics) {
         _selectedTopics[topic] = true;
+      }
+
+      if (widget.selectedTopic != null && _topics.contains(widget.selectedTopic)) {
+        for (var topic in _topics) {
+          _selectedTopics[topic] = (topic == widget.selectedTopic);
+        }
+        _showTopicsPanel = false;
+        _startTraining();
       }
     });
   }
@@ -2834,7 +2806,9 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
 // ============================================================
 
 class ReverseTranslationPage extends StatefulWidget {
-  const ReverseTranslationPage({super.key});
+  const ReverseTranslationPage({super.key, this.selectedTopic});
+
+  final String? selectedTopic;
 
   @override
   State<ReverseTranslationPage> createState() => _ReverseTranslationPageState();
@@ -2875,6 +2849,14 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
     setState(() {
       for (var topic in _topics) {
         _selectedTopics[topic] = true;
+      }
+
+      if (widget.selectedTopic != null && _topics.contains(widget.selectedTopic)) {
+        for (var topic in _topics) {
+          _selectedTopics[topic] = (topic == widget.selectedTopic);
+        }
+        _showTopicsPanel = false;
+        _startTraining();
       }
     });
   }
@@ -3805,12 +3787,10 @@ class _ProgressPageState extends State<ProgressPage> {
   }
 
   Future<void> _resetTopicProgress(String topic) async {
-    // Получаем все слова в теме
     final words = await _dbService.getWordsByTopic(topic, language: _selectedLanguage);
 
     if (words.isEmpty) return;
 
-    // Показываем диалог подтверждения
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -3835,7 +3815,6 @@ class _ProgressPageState extends State<ProgressPage> {
 
     if (confirm != true) return;
 
-    // Сбрасываем прогресс для каждого слова
     for (var word in words) {
       word.correctCount = 0;
       word.wrongCount = 0;
@@ -3846,7 +3825,6 @@ class _ProgressPageState extends State<ProgressPage> {
       await _dbService.updateWord(word);
     }
 
-    // Обновляем статистику
     await _loadData();
 
     if (mounted) {
@@ -3860,7 +3838,6 @@ class _ProgressPageState extends State<ProgressPage> {
   }
 
   Future<void> _resetAllProgress() async {
-    // Показываем диалог подтверждения
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -3904,6 +3881,257 @@ class _ProgressPageState extends State<ProgressPage> {
     }
   }
 
+  void _showRepeatOptions(String topic) {
+    final mediaQuery = MediaQuery.of(context);
+    final isLandscape = mediaQuery.orientation == Orientation.landscape;
+
+    if (isLandscape) {
+      // Для горизонтального режима - компактный AlertDialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          contentPadding: const EdgeInsets.all(16),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Повторить тему "$topic"',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              _buildRepeatOptionButton(
+                icon: Icons.edit_note,
+                title: 'ТРЕНАЖЁР',
+                color: Colors.green,
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TrainerPage(selectedTopic: topic),
+                    ),
+                  );
+                },
+                isLandscape: true,
+              ),
+              const SizedBox(height: 8),
+              _buildRepeatOptionButton(
+                icon: Icons.quiz,
+                title: 'ВЫБОР ПЕРЕВОДА',
+                color: Colors.orange,
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MultipleChoicePage(selectedTopic: topic),
+                    ),
+                  );
+                },
+                isLandscape: true,
+              ),
+              const SizedBox(height: 8),
+              _buildRepeatOptionButton(
+                icon: Icons.translate,
+                title: 'С РУССКОГО',
+                color: Colors.purple,
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ReverseTranslationPage(selectedTopic: topic),
+                    ),
+                  );
+                },
+                isLandscape: true,
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      // Для вертикального режима - BottomSheet
+      showModalBottomSheet(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (context) => Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Повторить тему "$topic"',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Выберите способ повторения:',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildRepeatOptionButton(
+                icon: Icons.edit_note,
+                title: 'ТРЕНАЖЁР',
+                color: Colors.green,
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TrainerPage(selectedTopic: topic),
+                    ),
+                  );
+                },
+                isLandscape: false,
+              ),
+              const SizedBox(height: 12),
+              _buildRepeatOptionButton(
+                icon: Icons.quiz,
+                title: 'ВЫБОР ПЕРЕВОДА',
+                color: Colors.orange,
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MultipleChoicePage(selectedTopic: topic),
+                    ),
+                  );
+                },
+                isLandscape: false,
+              ),
+              const SizedBox(height: 12),
+              _buildRepeatOptionButton(
+                icon: Icons.translate,
+                title: 'С РУССКОГО',
+                color: Colors.purple,
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ReverseTranslationPage(selectedTopic: topic),
+                    ),
+                  );
+                },
+                isLandscape: false,
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _buildRepeatOptionButton({
+    required IconData icon,
+    required String title,
+    required Color color,
+    required VoidCallback onTap,
+    required bool isLandscape,
+  }) {
+    if (isLandscape) {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: color,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 12,
+                color: color,
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 28,
+                color: color,
+              ),
+              const SizedBox(width: 16),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+              const Spacer(),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: color,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
@@ -3913,7 +4141,6 @@ class _ProgressPageState extends State<ProgressPage> {
       appBar: AppBar(
         title: const Text('ПРОГРЕСС'),
         actions: [
-          // Кнопка сброса всего прогресса
           IconButton(
             icon: const Icon(Icons.delete_sweep, color: Colors.red),
             onPressed: _resetAllProgress,
@@ -3954,7 +4181,6 @@ class _ProgressPageState extends State<ProgressPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Общая статистика
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -4102,7 +4328,6 @@ class _ProgressPageState extends State<ProgressPage> {
 
         const SizedBox(height: 20),
 
-        // Заголовок тем
         Row(
           children: [
             const Icon(Icons.folder, color: Colors.teal),
@@ -4127,7 +4352,6 @@ class _ProgressPageState extends State<ProgressPage> {
         ),
         const SizedBox(height: 12),
 
-        // Список тем
         if (_topics.isEmpty)
           Center(
             child: Padding(
@@ -4223,7 +4447,6 @@ class _ProgressPageState extends State<ProgressPage> {
           children: [
             Row(
               children: [
-                // Иконка темы (первая буква)
                 Container(
                   width: 48,
                   height: 48,
@@ -4279,11 +4502,17 @@ class _ProgressPageState extends State<ProgressPage> {
                     ),
                   ),
                 ),
-                // Кнопка сброса прогресса по теме
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
                   onPressed: () => _resetTopicProgress(topic),
                   tooltip: 'Сбросить прогресс по теме',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.repeat, color: Colors.blue, size: 20),
+                  onPressed: () => _showRepeatOptions(topic),
+                  tooltip: 'Повторить тему',
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
@@ -4548,7 +4777,6 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
       appBar: AppBar(
         title: Text(widget.topic),
         actions: [
-          // Кнопка сброса всех слов в теме
           IconButton(
             icon: const Icon(Icons.delete_sweep, color: Colors.red),
             onPressed: _resetAllWordsInTopic,
@@ -4575,7 +4803,6 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
         children: [
-          // Компактная статистика (фиксированная вверху, но маленькая)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: Colors.teal.shade50,
@@ -4591,7 +4818,6 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
               ],
             ),
           ),
-          // Список слов (занимает всё оставшееся место)
           Expanded(
             child: _words.isEmpty
                 ? Center(
