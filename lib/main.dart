@@ -8,19 +8,86 @@ void main() {
   runApp(const LanguageLearningApp());
 }
 
-class LanguageLearningApp extends StatelessWidget {
+class LanguageLearningApp extends StatefulWidget {
   const LanguageLearningApp({super.key});
 
   @override
+  State<LanguageLearningApp> createState() => _LanguageLearningAppState();
+}
+
+class _LanguageLearningAppState extends State<LanguageLearningApp> {
+  bool _isDarkMode = false;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _isDarkMode = prefs.getBool('isDarkMode') ?? false;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _toggleTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isDarkMode = !_isDarkMode;
+    });
+    await prefs.setBool('isDarkMode', _isDarkMode);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const MaterialApp(
+        home: Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
+        debugShowCheckedModeBanner: false,
+      );
+    }
+
     return MaterialApp(
       title: 'Словко',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
-      home: const MainPage(),
+      theme: _buildLightTheme(),
+      darkTheme: _buildDarkTheme(),
+      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      home: MainPage(toggleTheme: _toggleTheme, isDarkMode: _isDarkMode),
       debugShowCheckedModeBanner: false,
+    );
+  }
+
+  ThemeData _buildLightTheme() {
+    return ThemeData(
+      primarySwatch: Colors.blue,
+      useMaterial3: true,
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: Colors.white,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
+    );
+  }
+
+  ThemeData _buildDarkTheme() {
+    return ThemeData(
+      primarySwatch: Colors.blue,
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: const Color(0xFF1E1E2E),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF1E1E2E),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
     );
   }
 }
@@ -91,6 +158,55 @@ class Word {
 }
 
 // ============================================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ЯЗЫКОВ
+// ============================================================
+
+String getLanguageName(String code) {
+  switch (code) {
+    case 'en':
+      return 'Английский';
+    case 'es':
+      return 'Испанский';
+    case 'de':
+      return 'Немецкий';
+    case 'it':
+      return 'Итальянский';
+    default:
+      return 'Английский';
+  }
+}
+
+String getLanguageFlag(String code) {
+  switch (code) {
+    case 'en':
+      return '🇬🇧';
+    case 'es':
+      return '🇪🇸';
+    case 'de':
+      return '🇩🇪';
+    case 'it':
+      return '🇮🇹';
+    default:
+      return '🇬🇧';
+  }
+}
+
+String getLanguageNameForGrammar(String code) {
+  switch (code) {
+    case 'en':
+      return 'английском';
+    case 'es':
+      return 'испанском';
+    case 'de':
+      return 'немецком';
+    case 'it':
+      return 'итальянском';
+    default:
+      return 'английском';
+  }
+}
+
+// ============================================================
 // СЕРВИС ДЛЯ УПРАВЛЕНИЯ ПОДСКАЗКАМИ
 // ============================================================
 
@@ -131,14 +247,14 @@ class TutorialService {
   static void showMainTutorial(BuildContext context, {bool forceShow = false}) {
     showDialog(
       context: context,
-      builder: (context) => _MainTutorialDialog(),
+      builder: (context) => const _MainTutorialDialog(),
     );
   }
 
   static void showProgressTutorial(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => _ProgressTutorialDialog(),
+      builder: (context) => const _ProgressTutorialDialog(),
     );
   }
 }
@@ -148,12 +264,16 @@ class TutorialService {
 // ============================================================
 
 class _MainTutorialDialog extends StatelessWidget {
+  const _MainTutorialDialog();
+
   @override
   Widget build(BuildContext context) {
     final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: isDark ? const Color(0xFF2D2D44) : Colors.white,
       child: Container(
         width: isLandscape ? 500 : null,
         constraints: BoxConstraints(
@@ -173,11 +293,12 @@ class _MainTutorialDialog extends StatelessWidget {
                     style: TextStyle(
                       fontSize: isLandscape ? 16 : 20,
                       fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black87,
                     ),
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.close, size: isLandscape ? 18 : 22),
+                  icon: Icon(Icons.close, size: isLandscape ? 18 : 22, color: isDark ? Colors.white70 : Colors.grey),
                   onPressed: () => Navigator.pop(context),
                   padding: EdgeInsets.zero,
                   constraints: BoxConstraints(minWidth: 30, minHeight: 30),
@@ -196,6 +317,7 @@ class _MainTutorialDialog extends StatelessWidget {
                       title: 'СЛОВАРЬ',
                       description: 'Просматривайте все слова по темам и языкам',
                       isLandscape: isLandscape,
+                      isDark: isDark,
                     ),
                     SizedBox(height: isLandscape ? 8 : 16),
                     _buildSection(
@@ -204,15 +326,16 @@ class _MainTutorialDialog extends StatelessWidget {
                       title: 'ТРЕНИРОВКИ',
                       description: 'Здесь происходит основное изучение слов. Доступны три режима:',
                       isLandscape: isLandscape,
+                      isDark: isDark,
                     ),
                     Padding(
                       padding: EdgeInsets.only(left: isLandscape ? 30 : 40, top: 4),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildSubItem('ТРЕНАЖЁР', '— вводите перевод самостоятельно'),
-                          _buildSubItem('ВЫБОР ПЕРЕВОДА', '— выбирайте из 4 вариантов'),
-                          _buildSubItem('С РУССКОГО', '— переводите на изучаемый язык'),
+                          _buildSubItem('ТРЕНАЖЁР', '— вводите перевод самостоятельно', isDark),
+                          _buildSubItem('ВЫБОР ПЕРЕВОДА', '— выбирайте из 4 вариантов', isDark),
+                          _buildSubItem('С РУССКОГО', '— переводите на изучаемый язык', isDark),
                         ],
                       ),
                     ),
@@ -223,12 +346,13 @@ class _MainTutorialDialog extends StatelessWidget {
                       title: 'ПРОГРЕСС',
                       description: 'Отслеживайте статистику изучения. Нажмите на тему — увидите детали по каждому слову',
                       isLandscape: isLandscape,
+                      isDark: isDark,
                     ),
                     SizedBox(height: isLandscape ? 8 : 16),
                     Container(
                       padding: EdgeInsets.all(isLandscape ? 8 : 12),
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
+                        color: isDark ? Colors.blue.withValues(alpha: 0.15) : Colors.blue.shade50,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
@@ -240,7 +364,7 @@ class _MainTutorialDialog extends StatelessWidget {
                               'Нажмите на кнопку "?" справа вверху, чтобы снова увидеть эту подсказку',
                               style: TextStyle(
                                 fontSize: isLandscape ? 11 : 13,
-                                color: Colors.blue.shade700,
+                                color: isDark ? Colors.white70 : Colors.blue.shade700,
                               ),
                             ),
                           ),
@@ -280,6 +404,7 @@ class _MainTutorialDialog extends StatelessWidget {
     required String title,
     required String description,
     required bool isLandscape,
+    required bool isDark,
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -310,7 +435,7 @@ class _MainTutorialDialog extends StatelessWidget {
                 description,
                 style: TextStyle(
                   fontSize: isLandscape ? 11 : 13,
-                  color: Colors.grey.shade700,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
                 ),
               ),
             ],
@@ -320,18 +445,18 @@ class _MainTutorialDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildSubItem(String title, String description) {
+  Widget _buildSubItem(String title, String description, bool isDark) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
       child: Row(
         children: [
-          Text('• ', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+          Text('• ', style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600, fontSize: 12)),
           Expanded(
             child: RichText(
               text: TextSpan(
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade700),
                 children: [
-                  TextSpan(text: title, style: TextStyle(fontWeight: FontWeight.w500, color: Colors.grey.shade800)),
+                  TextSpan(text: title, style: TextStyle(fontWeight: FontWeight.w500, color: isDark ? Colors.grey.shade300 : Colors.grey.shade800)),
                   TextSpan(text: description),
                 ],
               ),
@@ -348,12 +473,16 @@ class _MainTutorialDialog extends StatelessWidget {
 // ============================================================
 
 class _ProgressTutorialDialog extends StatelessWidget {
+  const _ProgressTutorialDialog();
+
   @override
   Widget build(BuildContext context) {
     final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: isDark ? const Color(0xFF2D2D44) : Colors.white,
       child: Container(
         width: isLandscape ? 450 : null,
         constraints: BoxConstraints(
@@ -373,11 +502,12 @@ class _ProgressTutorialDialog extends StatelessWidget {
                     style: TextStyle(
                       fontSize: isLandscape ? 16 : 20,
                       fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black87,
                     ),
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.close, size: isLandscape ? 18 : 22),
+                  icon: Icon(Icons.close, size: isLandscape ? 18 : 22, color: isDark ? Colors.white70 : Colors.grey),
                   onPressed: () => Navigator.pop(context),
                   padding: EdgeInsets.zero,
                   constraints: BoxConstraints(minWidth: 30, minHeight: 30),
@@ -395,6 +525,7 @@ class _ProgressTutorialDialog extends StatelessWidget {
                       title: 'Просмотр деталей',
                       description: 'Нажмите на карточку темы, чтобы увидеть подробную статистику по каждому слову',
                       isLandscape: isLandscape,
+                      isDark: isDark,
                     ),
                     SizedBox(height: isLandscape ? 8 : 16),
                     _buildTip(
@@ -402,6 +533,7 @@ class _ProgressTutorialDialog extends StatelessWidget {
                       title: 'Повторение темы',
                       description: 'Нажмите на иконку 🔄 в карточке темы, чтобы быстро перейти к повторению этой темы',
                       isLandscape: isLandscape,
+                      isDark: isDark,
                     ),
                     SizedBox(height: isLandscape ? 4 : 8),
                     Padding(
@@ -410,7 +542,7 @@ class _ProgressTutorialDialog extends StatelessWidget {
                         'Можно выбрать любой из трёх режимов: Тренажёр, Выбор перевода или С русского',
                         style: TextStyle(
                           fontSize: isLandscape ? 11 : 12,
-                          color: Colors.grey.shade600,
+                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                           fontStyle: FontStyle.italic,
                         ),
                       ),
@@ -421,25 +553,26 @@ class _ProgressTutorialDialog extends StatelessWidget {
                       title: 'Сброс прогресса',
                       description: 'Красная иконка 🗑️ позволяет сбросить прогресс по теме или отдельному слову',
                       isLandscape: isLandscape,
+                      isDark: isDark,
                     ),
                     SizedBox(height: isLandscape ? 12 : 16),
                     Container(
                       padding: EdgeInsets.all(isLandscape ? 8 : 12),
                       decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
+                        color: isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.shade50,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.orange.shade200),
+                        border: Border.all(color: isDark ? Colors.orange.shade800 : Colors.orange.shade200),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.warning_amber, color: Colors.orange.shade700, size: isLandscape ? 16 : 20),
+                          Icon(Icons.warning_amber, color: isDark ? Colors.orange.shade300 : Colors.orange.shade700, size: isLandscape ? 16 : 20),
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'Прогресс обновляется автоматически после каждой тренировки',
                               style: TextStyle(
                                 fontSize: isLandscape ? 11 : 12,
-                                color: Colors.orange.shade800,
+                                color: isDark ? Colors.white70 : Colors.orange.shade800,
                               ),
                             ),
                           ),
@@ -478,6 +611,7 @@ class _ProgressTutorialDialog extends StatelessWidget {
     required String title,
     required String description,
     required bool isLandscape,
+    required bool isDark,
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -486,10 +620,10 @@ class _ProgressTutorialDialog extends StatelessWidget {
           width: isLandscape ? 28 : 32,
           height: isLandscape ? 28 : 32,
           decoration: BoxDecoration(
-            color: Colors.teal.shade50,
+            color: isDark ? Colors.teal.withValues(alpha: 0.15) : Colors.teal.shade50,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, color: Colors.teal.shade700, size: isLandscape ? 16 : 18),
+          child: Icon(icon, color: isDark ? Colors.teal.shade300 : Colors.teal.shade700, size: isLandscape ? 16 : 18),
         ),
         SizedBox(width: 12),
         Expanded(
@@ -501,14 +635,14 @@ class _ProgressTutorialDialog extends StatelessWidget {
                 style: TextStyle(
                   fontSize: isLandscape ? 13 : 15,
                   fontWeight: FontWeight.bold,
-                  color: Colors.teal.shade800,
+                  color: isDark ? Colors.teal.shade300 : Colors.teal.shade800,
                 ),
               ),
               Text(
                 description,
                 style: TextStyle(
                   fontSize: isLandscape ? 11 : 13,
-                  color: Colors.grey.shade700,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
                 ),
               ),
             ],
@@ -524,7 +658,10 @@ class _ProgressTutorialDialog extends StatelessWidget {
 // ============================================================
 
 class MainPage extends StatefulWidget {
-  const MainPage({super.key});
+  final VoidCallback toggleTheme;
+  final bool isDarkMode;
+
+  const MainPage({super.key, required this.toggleTheme, required this.isDarkMode});
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -539,11 +676,10 @@ class _MainPageState extends State<MainPage> {
 
   Future<void> _checkFirstLaunch() async {
     await Future.delayed(const Duration(milliseconds: 100));
-    if (mounted) {
-      final shouldShow = await TutorialService.shouldShowMainTutorial();
-      if (shouldShow) {
-        TutorialService.showMainTutorial(context);
-      }
+    if (!mounted) return;
+    final shouldShow = await TutorialService.shouldShowMainTutorial();
+    if (shouldShow && mounted) {
+      TutorialService.showMainTutorial(context);
     }
   }
 
@@ -555,18 +691,19 @@ class _MainPageState extends State<MainPage> {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final isLandscape = mediaQuery.orientation == Orientation.landscape;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? const Color(0xFF1E1E2E) : Colors.white,
       body: SafeArea(
         child: isLandscape
-            ? _buildLandscapeLayout(context)
-            : _buildPortraitLayout(context),
+            ? _buildLandscapeLayout(context, isDark)
+            : _buildPortraitLayout(context, isDark),
       ),
     );
   }
 
-  Widget _buildPortraitLayout(BuildContext context) {
+  Widget _buildPortraitLayout(BuildContext context, bool isDark) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
       child: Column(
@@ -584,15 +721,29 @@ class _MainPageState extends State<MainPage> {
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Colors.blue.shade800,
+                  color: isDark ? Colors.white : Colors.blue.shade800,
                 ),
               ),
               Positioned(
                 right: 0,
-                child: IconButton(
-                  icon: Icon(Icons.help_outline, color: Colors.blue.shade600, size: 26),
-                  onPressed: _showTutorial,
-                  tooltip: 'Показать подсказку',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        widget.isDarkMode ? Icons.nights_stay : Icons.wb_sunny,
+                        color: widget.isDarkMode ? Colors.amber.shade300 : Colors.amber.shade600,
+                        size: 26,
+                      ),
+                      onPressed: widget.toggleTheme,
+                      tooltip: widget.isDarkMode ? 'Светлая тема' : 'Тёмная тема',
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.help_outline, color: isDark ? Colors.blue.shade300 : Colors.blue.shade600, size: 26),
+                      onPressed: _showTutorial,
+                      tooltip: 'Показать подсказку',
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -609,9 +760,10 @@ class _MainPageState extends State<MainPage> {
                 MaterialPageRoute(builder: (context) => const DictionaryPage()),
               );
             },
+            isDark: isDark,
           ),
           const SizedBox(height: 30),
-          _buildDividerWithLabel('ТРЕНИРОВКИ'),
+          _buildDividerWithLabel('ТРЕНИРОВКИ', isDark),
           const SizedBox(height: 20),
           _buildTrainingButton(
             context,
@@ -625,6 +777,7 @@ class _MainPageState extends State<MainPage> {
                 MaterialPageRoute(builder: (context) => const TrainerPage()),
               );
             },
+            isDark: isDark,
           ),
           const SizedBox(height: 16),
           _buildTrainingButton(
@@ -639,6 +792,7 @@ class _MainPageState extends State<MainPage> {
                 MaterialPageRoute(builder: (context) => const MultipleChoicePage()),
               );
             },
+            isDark: isDark,
           ),
           const SizedBox(height: 16),
           _buildTrainingButton(
@@ -653,9 +807,10 @@ class _MainPageState extends State<MainPage> {
                 MaterialPageRoute(builder: (context) => const ReverseTranslationPage()),
               );
             },
+            isDark: isDark,
           ),
           const SizedBox(height: 30),
-          _buildSimpleDivider(),
+          _buildSimpleDivider(isDark),
           const SizedBox(height: 20),
           _buildMenuButton(
             context,
@@ -668,6 +823,7 @@ class _MainPageState extends State<MainPage> {
                 MaterialPageRoute(builder: (context) => const ProgressPage()),
               );
             },
+            isDark: isDark,
           ),
           const SizedBox(height: 20),
         ],
@@ -675,7 +831,7 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
-  Widget _buildLandscapeLayout(BuildContext context) {
+  Widget _buildLandscapeLayout(BuildContext context, bool isDark) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
       child: Column(
@@ -693,15 +849,29 @@ class _MainPageState extends State<MainPage> {
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Colors.blue.shade800,
+                  color: isDark ? Colors.white : Colors.blue.shade800,
                 ),
               ),
               Positioned(
                 right: 0,
-                child: IconButton(
-                  icon: Icon(Icons.help_outline, color: Colors.blue.shade600, size: 22),
-                  onPressed: _showTutorial,
-                  tooltip: 'Показать подсказку',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        widget.isDarkMode ? Icons.nights_stay : Icons.wb_sunny,
+                        color: widget.isDarkMode ? Colors.amber.shade300 : Colors.amber.shade600,
+                        size: 22,
+                      ),
+                      onPressed: widget.toggleTheme,
+                      tooltip: widget.isDarkMode ? 'Светлая тема' : 'Тёмная тема',
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.help_outline, color: isDark ? Colors.blue.shade300 : Colors.blue.shade600, size: 22),
+                      onPressed: _showTutorial,
+                      tooltip: 'Показать подсказку',
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -721,6 +891,7 @@ class _MainPageState extends State<MainPage> {
                       MaterialPageRoute(builder: (context) => const DictionaryPage()),
                     );
                   },
+                  isDark: isDark,
                 ),
               ),
               const SizedBox(width: 12),
@@ -736,12 +907,13 @@ class _MainPageState extends State<MainPage> {
                       MaterialPageRoute(builder: (context) => const ProgressPage()),
                     );
                   },
+                  isDark: isDark,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 20),
-          _buildCompactDividerWithLabel('ТРЕНИРОВКИ'),
+          _buildCompactDividerWithLabel('ТРЕНИРОВКИ', isDark),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -758,6 +930,7 @@ class _MainPageState extends State<MainPage> {
                       MaterialPageRoute(builder: (context) => const TrainerPage()),
                     );
                   },
+                  isDark: isDark,
                 ),
               ),
               const SizedBox(width: 12),
@@ -774,6 +947,7 @@ class _MainPageState extends State<MainPage> {
                       MaterialPageRoute(builder: (context) => const MultipleChoicePage()),
                     );
                   },
+                  isDark: isDark,
                 ),
               ),
               const SizedBox(width: 12),
@@ -790,23 +964,24 @@ class _MainPageState extends State<MainPage> {
                       MaterialPageRoute(builder: (context) => const ReverseTranslationPage()),
                     );
                   },
+                  isDark: isDark,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          _buildCompactSimpleDivider(),
+          _buildCompactSimpleDivider(isDark),
         ],
       ),
     );
   }
 
-  Widget _buildDividerWithLabel(String label) {
+  Widget _buildDividerWithLabel(String label, bool isDark) {
     return Row(
       children: [
         Expanded(
           child: Divider(
-            color: Colors.grey.shade300,
+            color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
             thickness: 1,
           ),
         ),
@@ -817,14 +992,14 @@ class _MainPageState extends State<MainPage> {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: Colors.grey.shade500,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
               letterSpacing: 1,
             ),
           ),
         ),
         Expanded(
           child: Divider(
-            color: Colors.grey.shade300,
+            color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
             thickness: 1,
           ),
         ),
@@ -832,9 +1007,9 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
-  Widget _buildSimpleDivider() {
+  Widget _buildSimpleDivider(bool isDark) {
     return Divider(
-      color: Colors.grey.shade200,
+      color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
       thickness: 1,
     );
   }
@@ -844,6 +1019,7 @@ class _MainPageState extends State<MainPage> {
     required Color color,
     required IconData icon,
     required VoidCallback onTap,
+    required bool isDark,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -851,7 +1027,7 @@ class _MainPageState extends State<MainPage> {
         width: double.infinity,
         height: 80,
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
+          color: isDark ? color.withValues(alpha: 0.15) : color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: color, width: 2),
         ),
@@ -870,7 +1046,7 @@ class _MainPageState extends State<MainPage> {
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: color,
+                color: isDark ? Colors.white : color,
                 letterSpacing: 1.5,
               ),
             ),
@@ -886,6 +1062,7 @@ class _MainPageState extends State<MainPage> {
     required Color backgroundColor,
     required IconData icon,
     required VoidCallback onTap,
+    required bool isDark,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -893,9 +1070,9 @@ class _MainPageState extends State<MainPage> {
         width: double.infinity,
         height: 70,
         decoration: BoxDecoration(
-          color: backgroundColor.withValues(alpha: 0.1),
+          color: isDark ? backgroundColor.withValues(alpha: 0.15) : backgroundColor.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: backgroundColor.withValues(alpha: 0.3), width: 1.5),
+          border: Border.all(color: isDark ? backgroundColor.withValues(alpha: 0.5) : backgroundColor.withValues(alpha: 0.3), width: 1.5),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -912,7 +1089,7 @@ class _MainPageState extends State<MainPage> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
-                color: textColor,
+                color: isDark ? Colors.white : textColor,
                 letterSpacing: 1,
               ),
             ),
@@ -922,12 +1099,12 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
-  Widget _buildCompactDividerWithLabel(String label) {
+  Widget _buildCompactDividerWithLabel(String label, bool isDark) {
     return Row(
       children: [
         Expanded(
           child: Divider(
-            color: Colors.grey.shade300,
+            color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
             thickness: 1,
           ),
         ),
@@ -938,14 +1115,14 @@ class _MainPageState extends State<MainPage> {
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w500,
-              color: Colors.grey.shade500,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
               letterSpacing: 1,
             ),
           ),
         ),
         Expanded(
           child: Divider(
-            color: Colors.grey.shade300,
+            color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
             thickness: 1,
           ),
         ),
@@ -953,9 +1130,9 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
-  Widget _buildCompactSimpleDivider() {
+  Widget _buildCompactSimpleDivider(bool isDark) {
     return Divider(
-      color: Colors.grey.shade200,
+      color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
       thickness: 1,
     );
   }
@@ -965,13 +1142,14 @@ class _MainPageState extends State<MainPage> {
     required Color color,
     required IconData icon,
     required VoidCallback onTap,
+    required bool isDark,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         height: 65,
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
+          color: isDark ? color.withValues(alpha: 0.15) : color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(15),
           border: Border.all(color: color, width: 2),
         ),
@@ -989,7 +1167,7 @@ class _MainPageState extends State<MainPage> {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: color,
+                color: isDark ? Colors.white : color,
                 letterSpacing: 1,
               ),
             ),
@@ -1005,15 +1183,16 @@ class _MainPageState extends State<MainPage> {
     required Color backgroundColor,
     required IconData icon,
     required VoidCallback onTap,
+    required bool isDark,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         height: 55,
         decoration: BoxDecoration(
-          color: backgroundColor.withValues(alpha: 0.1),
+          color: isDark ? backgroundColor.withValues(alpha: 0.15) : backgroundColor.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: backgroundColor.withValues(alpha: 0.3), width: 1.5),
+          border: Border.all(color: isDark ? backgroundColor.withValues(alpha: 0.5) : backgroundColor.withValues(alpha: 0.3), width: 1.5),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1030,7 +1209,7 @@ class _MainPageState extends State<MainPage> {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: textColor,
+                  color: isDark ? Colors.white : textColor,
                   letterSpacing: 0.5,
                 ),
               ),
@@ -1143,6 +1322,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final isLandscape = mediaQuery.orientation == Orientation.landscape;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -1159,9 +1339,12 @@ class _DictionaryPageState extends State<DictionaryPage> {
           ),
           DropdownButton<String>(
             value: _selectedLanguage,
-            items: const [
-              DropdownMenuItem(value: 'en', child: Text('🇬🇧 Английский')),
-              DropdownMenuItem(value: 'es', child: Text('🇪🇸 Испанский')),
+            dropdownColor: isDark ? const Color(0xFF2D2D44) : Colors.white,
+            items: [
+              DropdownMenuItem(value: 'en', child: Text('${getLanguageFlag('en')} ${getLanguageName('en')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'es', child: Text('${getLanguageFlag('es')} ${getLanguageName('es')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'de', child: Text('${getLanguageFlag('de')} ${getLanguageName('de')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'it', child: Text('${getLanguageFlag('it')} ${getLanguageName('it')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
             ],
             onChanged: (value) {
               setState(() {
@@ -1178,15 +1361,16 @@ class _DictionaryPageState extends State<DictionaryPage> {
           if (_showTopicFilter && _topics.isNotEmpty)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Colors.grey.shade100,
+              color: isDark ? const Color(0xFF2D2D44) : Colors.grey.shade100,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Фильтр по теме:',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black87,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -1203,6 +1387,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
                               _loadWords();
                             });
                           },
+                          backgroundColor: isDark ? const Color(0xFF3D3D5C) : null,
+                          selectedColor: isDark ? Colors.blue.shade700 : null,
+                          checkmarkColor: isDark ? Colors.white : null,
                         ),
                         const SizedBox(width: 8),
                         ..._topics.map((topic) => Padding(
@@ -1216,6 +1403,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
                                 _loadWords();
                               });
                             },
+                            backgroundColor: isDark ? const Color(0xFF3D3D5C) : null,
+                            selectedColor: isDark ? Colors.blue.shade700 : null,
+                            checkmarkColor: isDark ? Colors.white : null,
                           ),
                         )),
                       ],
@@ -1233,14 +1423,14 @@ class _DictionaryPageState extends State<DictionaryPage> {
                   Icon(
                     Icons.search_off,
                     size: 64,
-                    color: Colors.grey.shade400,
+                    color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
                   ),
                   const SizedBox(height: 16),
                   Text(
                     'Нет слов для отображения',
                     style: TextStyle(
                       fontSize: 18,
-                      color: Colors.grey.shade600,
+                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -1248,7 +1438,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
                     'Выберите другую тему или язык',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey.shade500,
+                      color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
                     ),
                   ),
                 ],
@@ -1271,7 +1461,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
-                            color: Colors.grey.shade200,
+                            color: isDark ? const Color(0xFF2D2D44) : Colors.grey.shade200,
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16.0,
                               vertical: 8.0,
@@ -1283,7 +1473,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
                                   style: TextStyle(
                                     fontSize: isLandscape ? 18.0 : 20.0,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.blue.shade800,
+                                    color: isDark ? Colors.blue.shade300 : Colors.blue.shade800,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -1291,7 +1481,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
                                   '(${words.length})',
                                   style: TextStyle(
                                     fontSize: isLandscape ? 14.0 : 16.0,
-                                    color: Colors.grey.shade600,
+                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                                   ),
                                 ),
                               ],
@@ -1302,12 +1492,14 @@ class _DictionaryPageState extends State<DictionaryPage> {
                               word.word,
                               style: TextStyle(
                                 fontSize: isLandscape ? 14.0 : 16.0,
+                                color: isDark ? Colors.white : Colors.black87,
                               ),
                             ),
                             subtitle: Text(
                               word.translation,
                               style: TextStyle(
                                 fontSize: isLandscape ? 12.0 : 14.0,
+                                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                               ),
                             ),
                             trailing: word.difficulty > 0.7
@@ -1329,7 +1521,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
                   bottom: 0,
                   child: Container(
                     width: isLandscape ? 40.0 : 30.0,
-                    color: Colors.white.withValues(alpha: 0.9),
+                    color: (isDark ? const Color(0xFF1E1E2E) : Colors.white).withValues(alpha: 0.9),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: _alphabet.map((letter) {
@@ -1346,8 +1538,8 @@ class _DictionaryPageState extends State<DictionaryPage> {
                                     fontSize: isLandscape ? 12.0 : 10.0,
                                     fontWeight: hasWords ? FontWeight.bold : FontWeight.normal,
                                     color: hasWords
-                                        ? Colors.blue.shade800
-                                        : Colors.grey.shade400,
+                                        ? (isDark ? Colors.blue.shade300 : Colors.blue.shade800)
+                                        : (isDark ? Colors.grey.shade700 : Colors.grey.shade400),
                                   ),
                                 ),
                               ),
@@ -1363,7 +1555,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
           ),
           Container(
             padding: const EdgeInsets.all(8),
-            color: Colors.grey.shade100,
+            color: isDark ? const Color(0xFF2D2D44) : Colors.grey.shade100,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1371,18 +1563,20 @@ class _DictionaryPageState extends State<DictionaryPage> {
                   'Всего слов: ${_allWords.length}',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey.shade700,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
                   ),
                 ),
                 if (_selectedTopic != 'Все темы')
                   Chip(
-                    label: Text(_selectedTopic),
+                    label: Text(_selectedTopic, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
                     onDeleted: () {
                       setState(() {
                         _selectedTopic = 'Все темы';
                         _loadWords();
                       });
                     },
+                    backgroundColor: isDark ? const Color(0xFF3D3D5C) : null,
+                    deleteIconColor: isDark ? Colors.white70 : null,
                   ),
               ],
             ),
@@ -1547,6 +1741,7 @@ class _TrainerPageState extends State<TrainerPage> {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final isLandscape = mediaQuery.orientation == Orientation.landscape;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: isLandscape ? null : AppBar(
@@ -1560,9 +1755,12 @@ class _TrainerPageState extends State<TrainerPage> {
             ),
           DropdownButton<String>(
             value: _selectedLanguage,
-            items: const [
-              DropdownMenuItem(value: 'en', child: Text('🇬🇧 Английский')),
-              DropdownMenuItem(value: 'es', child: Text('🇪🇸 Испанский')),
+            dropdownColor: isDark ? const Color(0xFF2D2D44) : Colors.white,
+            items: [
+              DropdownMenuItem(value: 'en', child: Text('${getLanguageFlag('en')} ${getLanguageName('en')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'es', child: Text('${getLanguageFlag('es')} ${getLanguageName('es')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'de', child: Text('${getLanguageFlag('de')} ${getLanguageName('de')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'it', child: Text('${getLanguageFlag('it')} ${getLanguageName('it')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
             ],
             onChanged: (value) {
               setState(() {
@@ -1578,13 +1776,13 @@ class _TrainerPageState extends State<TrainerPage> {
       ),
       body: SafeArea(
         child: isLandscape
-            ? _buildLandscapeLayout(context)
-            : _buildPortraitLayout(context),
+            ? _buildLandscapeLayout(context, isDark)
+            : _buildPortraitLayout(context, isDark),
       ),
     );
   }
 
-  Widget _buildPortraitLayout(BuildContext context) {
+  Widget _buildPortraitLayout(BuildContext context, bool isDark) {
     if (_currentWord == null && _feedback.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(16.0),
@@ -1592,7 +1790,7 @@ class _TrainerPageState extends State<TrainerPage> {
           children: [
             if (_showTopicsPanel && _topics.isNotEmpty)
               Expanded(
-                child: _buildTopicsPanel(false),
+                child: _buildTopicsPanel(false, isDark),
               )
             else
               Expanded(
@@ -1612,7 +1810,7 @@ class _TrainerPageState extends State<TrainerPage> {
                             : 'Выберите темы и начните тренировку',
                         style: TextStyle(
                           fontSize: 18,
-                          color: Colors.grey.shade600,
+                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -1636,7 +1834,7 @@ class _TrainerPageState extends State<TrainerPage> {
     }
 
     if (_currentWord == null && _feedback.isNotEmpty) {
-      return _buildCompletionScreen(false);
+      return _buildCompletionScreen(false, isDark);
     }
 
     return Padding(
@@ -1644,7 +1842,7 @@ class _TrainerPageState extends State<TrainerPage> {
       child: Column(
         children: [
           if (_showTopicsPanel && _topics.isNotEmpty)
-            _buildTopicsPanel(false),
+            _buildTopicsPanel(false, isDark),
 
           if (!_showTopicsPanel)
             Padding(
@@ -1662,7 +1860,7 @@ class _TrainerPageState extends State<TrainerPage> {
               children: [
                 LinearProgressIndicator(
                   value: (_currentIndex + 1) / _trainingWords.length,
-                  backgroundColor: Colors.grey.shade200,
+                  backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
                 ),
                 const SizedBox(height: 8),
@@ -1673,7 +1871,7 @@ class _TrainerPageState extends State<TrainerPage> {
                       'Слово ${_currentIndex + 1} из ${_trainingWords.length}',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.grey.shade600,
+                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                       ),
                     ),
                     Container(
@@ -1734,15 +1932,25 @@ class _TrainerPageState extends State<TrainerPage> {
           TextField(
             controller: _controller,
             focusNode: _focusNode,
+            style: TextStyle(color: isDark ? Colors.white : Colors.black),
             decoration: InputDecoration(
               hintText: 'Введите перевод',
-              border: const OutlineInputBorder(),
+              hintStyle: TextStyle(color: isDark ? Colors.grey.shade500 : Colors.grey),
+              border: OutlineInputBorder(
+                borderSide: BorderSide(color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: isDark ? Colors.blue.shade300 : Colors.blue),
+              ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16.0,
                 vertical: 16.0,
               ),
               suffixIcon: IconButton(
-                icon: const Icon(Icons.check),
+                icon: Icon(Icons.check, color: isDark ? Colors.white70 : null),
                 onPressed: _showTranslation ? null : _checkAnswer,
               ),
             ),
@@ -1793,17 +2001,17 @@ class _TrainerPageState extends State<TrainerPage> {
     );
   }
 
-  Widget _buildLandscapeLayout(BuildContext context) {
+  Widget _buildLandscapeLayout(BuildContext context, bool isDark) {
     return Row(
       children: [
         Container(
           width: 48,
-          color: Colors.grey.shade50,
+          color: isDark ? const Color(0xFF2D2D44) : Colors.grey.shade50,
           child: Column(
             children: [
               const SizedBox(height: 4),
               IconButton(
-                icon: const Icon(Icons.arrow_back, size: 20),
+                icon: Icon(Icons.arrow_back, size: 20, color: isDark ? Colors.white : Colors.black),
                 onPressed: () => Navigator.pop(context),
                 tooltip: 'Назад',
                 padding: EdgeInsets.zero,
@@ -1811,29 +2019,32 @@ class _TrainerPageState extends State<TrainerPage> {
               ),
               const SizedBox(height: 8),
               IconButton(
-                icon: Icon(_showTopicsPanel ? Icons.folder_open : Icons.folder_outlined, size: 20),
+                icon: Icon(_showTopicsPanel ? Icons.folder_open : Icons.folder_outlined, size: 20, color: isDark ? Colors.white : Colors.black),
                 onPressed: _toggleTopicsPanel,
                 tooltip: 'Темы',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
               const Spacer(),
-              IconButton(
+              PopupMenuButton<String>(
                 icon: Text(
-                  _selectedLanguage == 'en' ? '🇬🇧' : '🇪🇸',
+                  getLanguageFlag(_selectedLanguage),
                   style: const TextStyle(fontSize: 18),
                 ),
-                onPressed: () {
+                onSelected: (value) {
                   setState(() {
-                    _selectedLanguage = _selectedLanguage == 'en' ? 'es' : 'en';
+                    _selectedLanguage = value;
                     if (_currentWord != null) {
                       _startTraining();
                     }
                   });
                 },
-                tooltip: 'Сменить язык',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                itemBuilder: (context) => [
+                  PopupMenuItem(value: 'en', child: Text('${getLanguageFlag('en')} ${getLanguageName('en')}')),
+                  PopupMenuItem(value: 'es', child: Text('${getLanguageFlag('es')} ${getLanguageName('es')}')),
+                  PopupMenuItem(value: 'de', child: Text('${getLanguageFlag('de')} ${getLanguageName('de')}')),
+                  PopupMenuItem(value: 'it', child: Text('${getLanguageFlag('it')} ${getLanguageName('it')}')),
+                ],
               ),
               const SizedBox(height: 4),
             ],
@@ -1842,23 +2053,23 @@ class _TrainerPageState extends State<TrainerPage> {
 
         Expanded(
           child: _currentWord != null
-              ? _buildLandscapeTrainingContent()
+              ? _buildLandscapeTrainingContent(isDark)
               : _feedback.isNotEmpty
-              ? _buildCompletionScreen(true)
-              : _buildLandscapeStartScreen(),
+              ? _buildCompletionScreen(true, isDark)
+              : _buildLandscapeStartScreen(isDark),
         ),
 
         if (_showTopicsPanel)
           Container(
             width: 200,
-            color: Colors.grey.shade50,
-            child: _buildTopicsPanel(true),
+            color: isDark ? const Color(0xFF2D2D44) : Colors.grey.shade50,
+            child: _buildTopicsPanel(true, isDark),
           ),
       ],
     );
   }
 
-  Widget _buildLandscapeStartScreen() {
+  Widget _buildLandscapeStartScreen(bool isDark) {
     return Padding(
       padding: const EdgeInsets.all(12.0),
       child: Column(
@@ -1876,7 +2087,7 @@ class _TrainerPageState extends State<TrainerPage> {
                 : 'Выберите темы и начните тренировку',
             style: TextStyle(
               fontSize: 13,
-              color: Colors.grey.shade600,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
             ),
             textAlign: TextAlign.center,
           ),
@@ -1894,7 +2105,7 @@ class _TrainerPageState extends State<TrainerPage> {
     );
   }
 
-  Widget _buildLandscapeTrainingContent() {
+  Widget _buildLandscapeTrainingContent(bool isDark) {
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Column(
@@ -1904,7 +2115,7 @@ class _TrainerPageState extends State<TrainerPage> {
               Expanded(
                 child: LinearProgressIndicator(
                   value: (_currentIndex + 1) / _trainingWords.length,
-                  backgroundColor: Colors.grey.shade200,
+                  backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
                 ),
               ),
@@ -1913,7 +2124,7 @@ class _TrainerPageState extends State<TrainerPage> {
                 '${_currentIndex + 1}/${_trainingWords.length}',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey.shade600,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                 ),
               ),
               const SizedBox(width: 8),
@@ -1990,9 +2201,19 @@ class _TrainerPageState extends State<TrainerPage> {
                         TextField(
                           controller: _controller,
                           focusNode: _focusNode,
+                          style: TextStyle(color: isDark ? Colors.white : Colors.black),
                           decoration: InputDecoration(
                             hintText: 'Введите перевод',
-                            border: const OutlineInputBorder(),
+                            hintStyle: TextStyle(color: isDark ? Colors.grey.shade500 : Colors.grey),
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide(color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: isDark ? Colors.blue.shade300 : Colors.blue),
+                            ),
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 12.0,
                               vertical: 12.0,
@@ -2064,7 +2285,7 @@ class _TrainerPageState extends State<TrainerPage> {
     );
   }
 
-  Widget _buildTopicsPanel(bool isLandscape) {
+  Widget _buildTopicsPanel(bool isLandscape, bool isDark) {
     if (_topics.isEmpty) {
       return Center(
         child: Padding(
@@ -2073,7 +2294,7 @@ class _TrainerPageState extends State<TrainerPage> {
             'Нет доступных тем\nДобавьте слова через words_data.dart',
             style: TextStyle(
               fontSize: isLandscape ? 11 : 14,
-              color: Colors.grey.shade600,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
             ),
             textAlign: TextAlign.center,
           ),
@@ -2095,10 +2316,11 @@ class _TrainerPageState extends State<TrainerPage> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, size: 18),
+                  icon: Icon(Icons.close, size: 18, color: isDark ? Colors.white70 : Colors.grey),
                   onPressed: _toggleTopicsPanel,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
@@ -2114,7 +2336,7 @@ class _TrainerPageState extends State<TrainerPage> {
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     minimumSize: Size.zero,
                   ),
-                  child: const Text('Все', style: TextStyle(fontSize: 11)),
+                  child: Text('Все', style: TextStyle(fontSize: 11, color: isDark ? Colors.blue.shade300 : null)),
                 ),
                 TextButton(
                   onPressed: () => _selectAllTopics(false),
@@ -2122,7 +2344,7 @@ class _TrainerPageState extends State<TrainerPage> {
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     minimumSize: Size.zero,
                   ),
-                  child: const Text('Снять', style: TextStyle(fontSize: 11)),
+                  child: Text('Снять', style: TextStyle(fontSize: 11, color: isDark ? Colors.blue.shade300 : null)),
                 ),
               ],
             ),
@@ -2130,7 +2352,7 @@ class _TrainerPageState extends State<TrainerPage> {
             Expanded(
               child: ListView(
                 children: _topics.map((topic) => CheckboxListTile(
-                  title: Text(topic, style: const TextStyle(fontSize: 12)),
+                  title: Text(topic, style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87)),
                   value: _selectedTopics[topic] ?? false,
                   onChanged: (bool? value) {
                     setState(() {
@@ -2141,6 +2363,8 @@ class _TrainerPageState extends State<TrainerPage> {
                   visualDensity: VisualDensity.compact,
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: EdgeInsets.zero,
+                  checkColor: isDark ? Colors.black : null,
+                  activeColor: isDark ? Colors.blue.shade300 : null,
                 )).toList(),
               ),
             ),
@@ -2176,6 +2400,7 @@ class _TrainerPageState extends State<TrainerPage> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
               ),
             ),
             const SizedBox(height: 12),
@@ -2183,12 +2408,12 @@ class _TrainerPageState extends State<TrainerPage> {
               children: [
                 TextButton(
                   onPressed: () => _selectAllTopics(true),
-                  child: const Text('Выбрать все', style: TextStyle(fontSize: 15)),
+                  child: Text('Выбрать все', style: TextStyle(fontSize: 15, color: isDark ? Colors.blue.shade300 : null)),
                 ),
                 const SizedBox(width: 8),
                 TextButton(
                   onPressed: () => _selectAllTopics(false),
-                  child: const Text('Снять все', style: TextStyle(fontSize: 15)),
+                  child: Text('Снять все', style: TextStyle(fontSize: 15, color: isDark ? Colors.blue.shade300 : null)),
                 ),
               ],
             ),
@@ -2196,7 +2421,7 @@ class _TrainerPageState extends State<TrainerPage> {
             Expanded(
               child: ListView(
                 children: _topics.map((topic) => CheckboxListTile(
-                  title: Text(topic, style: const TextStyle(fontSize: 16)),
+                  title: Text(topic, style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
                   value: _selectedTopics[topic] ?? false,
                   onChanged: (bool? value) {
                     setState(() {
@@ -2204,6 +2429,8 @@ class _TrainerPageState extends State<TrainerPage> {
                     });
                   },
                   controlAffinity: ListTileControlAffinity.leading,
+                  checkColor: isDark ? Colors.black : null,
+                  activeColor: isDark ? Colors.blue.shade300 : null,
                 )).toList(),
               ),
             ),
@@ -2231,7 +2458,7 @@ class _TrainerPageState extends State<TrainerPage> {
     }
   }
 
-  Widget _buildCompletionScreen(bool isLandscape) {
+  Widget _buildCompletionScreen(bool isLandscape, bool isDark) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -2249,6 +2476,7 @@ class _TrainerPageState extends State<TrainerPage> {
               style: TextStyle(
                 fontSize: isLandscape ? 16 : 28,
                 fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
               ),
             ),
             SizedBox(height: isLandscape ? 4 : 16),
@@ -2256,7 +2484,7 @@ class _TrainerPageState extends State<TrainerPage> {
               'Правильных ответов: $_correctAnswers из $_totalAnswers',
               style: TextStyle(
                 fontSize: isLandscape ? 12 : 20,
-                color: Colors.grey.shade700,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
               ),
             ),
             SizedBox(height: isLandscape ? 12 : 30),
@@ -2490,9 +2718,9 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
     });
   }
 
-  Color _getOptionColor(String option) {
+  Color _getOptionColor(String option, bool isDark) {
     if (!_showResult) {
-      return Colors.blue.shade50;
+      return isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50;
     }
 
     if (option == _currentWord!.translation) {
@@ -2503,13 +2731,14 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
       return Colors.red.shade100;
     }
 
-    return Colors.grey.shade100;
+    return isDark ? Colors.grey.shade800 : Colors.grey.shade100;
   }
 
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final isLandscape = mediaQuery.orientation == Orientation.landscape;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: isLandscape ? null : AppBar(
@@ -2523,9 +2752,12 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
             ),
           DropdownButton<String>(
             value: _selectedLanguage,
-            items: const [
-              DropdownMenuItem(value: 'en', child: Text('🇬🇧 Английский')),
-              DropdownMenuItem(value: 'es', child: Text('🇪🇸 Испанский')),
+            dropdownColor: isDark ? const Color(0xFF2D2D44) : Colors.white,
+            items: [
+              DropdownMenuItem(value: 'en', child: Text('${getLanguageFlag('en')} ${getLanguageName('en')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'es', child: Text('${getLanguageFlag('es')} ${getLanguageName('es')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'de', child: Text('${getLanguageFlag('de')} ${getLanguageName('de')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'it', child: Text('${getLanguageFlag('it')} ${getLanguageName('it')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
             ],
             onChanged: (value) {
               setState(() {
@@ -2541,13 +2773,13 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
       ),
       body: SafeArea(
         child: isLandscape
-            ? _buildLandscapeLayout(context)
-            : _buildPortraitLayout(context),
+            ? _buildLandscapeLayout(context, isDark)
+            : _buildPortraitLayout(context, isDark),
       ),
     );
   }
 
-  Widget _buildPortraitLayout(BuildContext context) {
+  Widget _buildPortraitLayout(BuildContext context, bool isDark) {
     if (_currentWord == null && _feedback.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(16.0),
@@ -2555,7 +2787,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
           children: [
             if (_showTopicsPanel && _topics.isNotEmpty)
               Expanded(
-                child: _buildTopicsPanel(false),
+                child: _buildTopicsPanel(false, isDark),
               )
             else
               Expanded(
@@ -2575,7 +2807,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
                             : 'Выберите темы и начните тренировку',
                         style: TextStyle(
                           fontSize: 18,
-                          color: Colors.grey.shade600,
+                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -2599,7 +2831,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
     }
 
     if (_currentWord == null && _feedback.isNotEmpty) {
-      return _buildCompletionScreen(false);
+      return _buildCompletionScreen(false, isDark);
     }
 
     return Padding(
@@ -2607,7 +2839,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
       child: Column(
         children: [
           if (_showTopicsPanel && _topics.isNotEmpty)
-            _buildTopicsPanel(false),
+            _buildTopicsPanel(false, isDark),
 
           if (!_showTopicsPanel)
             Padding(
@@ -2625,7 +2857,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
               children: [
                 LinearProgressIndicator(
                   value: (_currentIndex + 1) / _trainingWords.length,
-                  backgroundColor: Colors.grey.shade200,
+                  backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
                 ),
                 const SizedBox(height: 8),
@@ -2636,7 +2868,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
                       'Слово ${_currentIndex + 1} из ${_trainingWords.length}',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.grey.shade600,
+                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                       ),
                     ),
                     Container(
@@ -2699,7 +2931,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
               children: [
                 ..._options.map((option) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: _buildOptionButton(option, false),
+                  child: _buildOptionButton(option, false, isDark),
                 )),
 
                 if (_showResult)
@@ -2742,17 +2974,17 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
     );
   }
 
-  Widget _buildLandscapeLayout(BuildContext context) {
+  Widget _buildLandscapeLayout(BuildContext context, bool isDark) {
     return Row(
       children: [
         Container(
           width: 48,
-          color: Colors.grey.shade50,
+          color: isDark ? const Color(0xFF2D2D44) : Colors.grey.shade50,
           child: Column(
             children: [
               const SizedBox(height: 4),
               IconButton(
-                icon: const Icon(Icons.arrow_back, size: 20),
+                icon: Icon(Icons.arrow_back, size: 20, color: isDark ? Colors.white : Colors.black),
                 onPressed: () => Navigator.pop(context),
                 tooltip: 'Назад',
                 padding: EdgeInsets.zero,
@@ -2760,29 +2992,32 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
               ),
               const SizedBox(height: 8),
               IconButton(
-                icon: Icon(_showTopicsPanel ? Icons.folder_open : Icons.folder_outlined, size: 20),
+                icon: Icon(_showTopicsPanel ? Icons.folder_open : Icons.folder_outlined, size: 20, color: isDark ? Colors.white : Colors.black),
                 onPressed: _toggleTopicsPanel,
                 tooltip: 'Темы',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
               const Spacer(),
-              IconButton(
+              PopupMenuButton<String>(
                 icon: Text(
-                  _selectedLanguage == 'en' ? '🇬🇧' : '🇪🇸',
+                  getLanguageFlag(_selectedLanguage),
                   style: const TextStyle(fontSize: 18),
                 ),
-                onPressed: () {
+                onSelected: (value) {
                   setState(() {
-                    _selectedLanguage = _selectedLanguage == 'en' ? 'es' : 'en';
+                    _selectedLanguage = value;
                     if (_currentWord != null) {
                       _startTraining();
                     }
                   });
                 },
-                tooltip: 'Сменить язык',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                itemBuilder: (context) => [
+                  PopupMenuItem(value: 'en', child: Text('${getLanguageFlag('en')} ${getLanguageName('en')}')),
+                  PopupMenuItem(value: 'es', child: Text('${getLanguageFlag('es')} ${getLanguageName('es')}')),
+                  PopupMenuItem(value: 'de', child: Text('${getLanguageFlag('de')} ${getLanguageName('de')}')),
+                  PopupMenuItem(value: 'it', child: Text('${getLanguageFlag('it')} ${getLanguageName('it')}')),
+                ],
               ),
               const SizedBox(height: 4),
             ],
@@ -2791,23 +3026,23 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
 
         Expanded(
           child: _currentWord != null
-              ? _buildLandscapeTrainingContent()
+              ? _buildLandscapeTrainingContent(isDark)
               : _feedback.isNotEmpty
-              ? _buildCompletionScreen(true)
-              : _buildLandscapeStartScreen(),
+              ? _buildCompletionScreen(true, isDark)
+              : _buildLandscapeStartScreen(isDark),
         ),
 
         if (_showTopicsPanel)
           Container(
             width: 200,
-            color: Colors.grey.shade50,
-            child: _buildTopicsPanel(true),
+            color: isDark ? const Color(0xFF2D2D44) : Colors.grey.shade50,
+            child: _buildTopicsPanel(true, isDark),
           ),
       ],
     );
   }
 
-  Widget _buildLandscapeStartScreen() {
+  Widget _buildLandscapeStartScreen(bool isDark) {
     return Padding(
       padding: const EdgeInsets.all(12.0),
       child: Column(
@@ -2825,7 +3060,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
                 : 'Выберите темы и начните тренировку',
             style: TextStyle(
               fontSize: 13,
-              color: Colors.grey.shade600,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
             ),
             textAlign: TextAlign.center,
           ),
@@ -2843,7 +3078,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
     );
   }
 
-  Widget _buildLandscapeTrainingContent() {
+  Widget _buildLandscapeTrainingContent(bool isDark) {
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Column(
@@ -2853,7 +3088,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
               Expanded(
                 child: LinearProgressIndicator(
                   value: (_currentIndex + 1) / _trainingWords.length,
-                  backgroundColor: Colors.grey.shade200,
+                  backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
                 ),
               ),
@@ -2862,7 +3097,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
                 '${_currentIndex + 1}/${_trainingWords.length}',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey.shade600,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                 ),
               ),
               const SizedBox(width: 8),
@@ -2937,17 +3172,17 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
                       children: [
                         Row(
                           children: [
-                            Expanded(child: _buildOptionButton(_options[0], true)),
+                            Expanded(child: _buildOptionButton(_options[0], true, isDark)),
                             const SizedBox(width: 8),
-                            Expanded(child: _buildOptionButton(_options[1], true)),
+                            Expanded(child: _buildOptionButton(_options[1], true, isDark)),
                           ],
                         ),
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            Expanded(child: _buildOptionButton(_options[2], true)),
+                            Expanded(child: _buildOptionButton(_options[2], true, isDark)),
                             const SizedBox(width: 8),
-                            Expanded(child: _buildOptionButton(_options[3], true)),
+                            Expanded(child: _buildOptionButton(_options[3], true, isDark)),
                           ],
                         ),
 
@@ -2990,21 +3225,21 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
     );
   }
 
-  Widget _buildOptionButton(String option, bool isLandscape) {
+  Widget _buildOptionButton(String option, bool isLandscape, bool isDark) {
     return GestureDetector(
       onTap: _showResult ? null : () => _checkAnswer(option),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: EdgeInsets.all(isLandscape ? 14 : 18),
         decoration: BoxDecoration(
-          color: _getOptionColor(option),
+          color: _getOptionColor(option, isDark),
           borderRadius: BorderRadius.circular(isLandscape ? 10 : 15),
           border: Border.all(
             color: _showResult && option == _currentWord!.translation
                 ? Colors.green
                 : _showResult && option == _selectedOption && !_isCorrect
                 ? Colors.red
-                : Colors.grey.shade300,
+                : isDark ? Colors.grey.shade600 : Colors.grey.shade300,
             width: 2,
           ),
         ),
@@ -3016,7 +3251,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
               fontWeight: FontWeight.w500,
               color: _showResult && option == _currentWord!.translation
                   ? Colors.green.shade800
-                  : Colors.black87,
+                  : isDark ? Colors.white : Colors.black87,
             ),
             textAlign: TextAlign.center,
           ),
@@ -3025,7 +3260,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
     );
   }
 
-  Widget _buildTopicsPanel(bool isLandscape) {
+  Widget _buildTopicsPanel(bool isLandscape, bool isDark) {
     if (_topics.isEmpty) {
       return Center(
         child: Padding(
@@ -3034,7 +3269,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
             'Нет доступных тем\nДобавьте слова через words_data.dart',
             style: TextStyle(
               fontSize: isLandscape ? 11 : 14,
-              color: Colors.grey.shade600,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
             ),
             textAlign: TextAlign.center,
           ),
@@ -3056,10 +3291,11 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, size: 18),
+                  icon: Icon(Icons.close, size: 18, color: isDark ? Colors.white70 : Colors.grey),
                   onPressed: _toggleTopicsPanel,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
@@ -3075,7 +3311,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     minimumSize: Size.zero,
                   ),
-                  child: const Text('Все', style: TextStyle(fontSize: 11)),
+                  child: Text('Все', style: TextStyle(fontSize: 11, color: isDark ? Colors.blue.shade300 : null)),
                 ),
                 TextButton(
                   onPressed: () => _selectAllTopics(false),
@@ -3083,7 +3319,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     minimumSize: Size.zero,
                   ),
-                  child: const Text('Снять', style: TextStyle(fontSize: 11)),
+                  child: Text('Снять', style: TextStyle(fontSize: 11, color: isDark ? Colors.blue.shade300 : null)),
                 ),
               ],
             ),
@@ -3091,7 +3327,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
             Expanded(
               child: ListView(
                 children: _topics.map((topic) => CheckboxListTile(
-                  title: Text(topic, style: const TextStyle(fontSize: 12)),
+                  title: Text(topic, style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87)),
                   value: _selectedTopics[topic] ?? false,
                   onChanged: (bool? value) {
                     setState(() {
@@ -3102,6 +3338,8 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
                   visualDensity: VisualDensity.compact,
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: EdgeInsets.zero,
+                  checkColor: isDark ? Colors.black : null,
+                  activeColor: isDark ? Colors.blue.shade300 : null,
                 )).toList(),
               ),
             ),
@@ -3137,6 +3375,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
               ),
             ),
             const SizedBox(height: 12),
@@ -3144,12 +3383,12 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
               children: [
                 TextButton(
                   onPressed: () => _selectAllTopics(true),
-                  child: const Text('Выбрать все', style: TextStyle(fontSize: 15)),
+                  child: Text('Выбрать все', style: TextStyle(fontSize: 15, color: isDark ? Colors.blue.shade300 : null)),
                 ),
                 const SizedBox(width: 8),
                 TextButton(
                   onPressed: () => _selectAllTopics(false),
-                  child: const Text('Снять все', style: TextStyle(fontSize: 15)),
+                  child: Text('Снять все', style: TextStyle(fontSize: 15, color: isDark ? Colors.blue.shade300 : null)),
                 ),
               ],
             ),
@@ -3157,7 +3396,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
             Expanded(
               child: ListView(
                 children: _topics.map((topic) => CheckboxListTile(
-                  title: Text(topic, style: const TextStyle(fontSize: 16)),
+                  title: Text(topic, style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
                   value: _selectedTopics[topic] ?? false,
                   onChanged: (bool? value) {
                     setState(() {
@@ -3165,6 +3404,8 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
                     });
                   },
                   controlAffinity: ListTileControlAffinity.leading,
+                  checkColor: isDark ? Colors.black : null,
+                  activeColor: isDark ? Colors.blue.shade300 : null,
                 )).toList(),
               ),
             ),
@@ -3192,7 +3433,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
     }
   }
 
-  Widget _buildCompletionScreen(bool isLandscape) {
+  Widget _buildCompletionScreen(bool isLandscape, bool isDark) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -3210,6 +3451,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
               style: TextStyle(
                 fontSize: isLandscape ? 16 : 28,
                 fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
               ),
             ),
             SizedBox(height: isLandscape ? 4 : 16),
@@ -3217,7 +3459,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
               'Правильных ответов: $_correctAnswers из $_totalAnswers',
               style: TextStyle(
                 fontSize: isLandscape ? 12 : 20,
-                color: Colors.grey.shade700,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
               ),
             ),
             SizedBox(height: isLandscape ? 12 : 30),
@@ -3425,6 +3667,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final isLandscape = mediaQuery.orientation == Orientation.landscape;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: isLandscape ? null : AppBar(
@@ -3438,9 +3681,12 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
             ),
           DropdownButton<String>(
             value: _selectedLanguage,
-            items: const [
-              DropdownMenuItem(value: 'en', child: Text('🇬🇧 Английский')),
-              DropdownMenuItem(value: 'es', child: Text('🇪🇸 Испанский')),
+            dropdownColor: isDark ? const Color(0xFF2D2D44) : Colors.white,
+            items: [
+              DropdownMenuItem(value: 'en', child: Text('${getLanguageFlag('en')} ${getLanguageName('en')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'es', child: Text('${getLanguageFlag('es')} ${getLanguageName('es')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'de', child: Text('${getLanguageFlag('de')} ${getLanguageName('de')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'it', child: Text('${getLanguageFlag('it')} ${getLanguageName('it')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
             ],
             onChanged: (value) {
               setState(() {
@@ -3456,13 +3702,13 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
       ),
       body: SafeArea(
         child: isLandscape
-            ? _buildLandscapeLayout(context)
-            : _buildPortraitLayout(context),
+            ? _buildLandscapeLayout(context, isDark)
+            : _buildPortraitLayout(context, isDark),
       ),
     );
   }
 
-  Widget _buildPortraitLayout(BuildContext context) {
+  Widget _buildPortraitLayout(BuildContext context, bool isDark) {
     if (_currentWord == null && _feedback.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(16.0),
@@ -3470,7 +3716,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
           children: [
             if (_showTopicsPanel && _topics.isNotEmpty)
               Expanded(
-                child: _buildTopicsPanel(false),
+                child: _buildTopicsPanel(false, isDark),
               )
             else
               Expanded(
@@ -3490,7 +3736,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                             : 'Выберите темы и начните тренировку',
                         style: TextStyle(
                           fontSize: 18,
-                          color: Colors.grey.shade600,
+                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -3514,7 +3760,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
     }
 
     if (_currentWord == null && _feedback.isNotEmpty) {
-      return _buildCompletionScreen(false);
+      return _buildCompletionScreen(false, isDark);
     }
 
     return Padding(
@@ -3522,7 +3768,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
       child: Column(
         children: [
           if (_showTopicsPanel && _topics.isNotEmpty)
-            _buildTopicsPanel(false),
+            _buildTopicsPanel(false, isDark),
 
           if (!_showTopicsPanel)
             Padding(
@@ -3540,7 +3786,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
               children: [
                 LinearProgressIndicator(
                   value: (_currentIndex + 1) / _trainingWords.length,
-                  backgroundColor: Colors.grey.shade200,
+                  backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
                 ),
                 const SizedBox(height: 8),
@@ -3551,7 +3797,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                       'Слово ${_currentIndex + 1} из ${_trainingWords.length}',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.grey.shade600,
+                        color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                       ),
                     ),
                     Container(
@@ -3587,7 +3833,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
             child: Column(
               children: [
                 Text(
-                  'Напишите слово на ${_selectedLanguage == 'en' ? 'английском' : 'испанском'}:',
+                  'Напишите слово на ${getLanguageNameForGrammar(_selectedLanguage)}:',
                   style: TextStyle(
                     fontSize: 16,
                     color: Colors.white.withValues(alpha: 0.9),
@@ -3613,15 +3859,25 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
           TextField(
             controller: _controller,
             focusNode: _focusNode,
+            style: TextStyle(color: isDark ? Colors.white : Colors.black),
             decoration: InputDecoration(
               hintText: 'Введите слово',
-              border: const OutlineInputBorder(),
+              hintStyle: TextStyle(color: isDark ? Colors.grey.shade500 : Colors.grey),
+              border: OutlineInputBorder(
+                borderSide: BorderSide(color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: isDark ? Colors.blue.shade300 : Colors.blue),
+              ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16.0,
                 vertical: 16.0,
               ),
               suffixIcon: IconButton(
-                icon: const Icon(Icons.check),
+                icon: Icon(Icons.check, color: isDark ? Colors.white70 : null),
                 onPressed: _showAnswer ? null : _checkAnswer,
               ),
             ),
@@ -3672,17 +3928,17 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
     );
   }
 
-  Widget _buildLandscapeLayout(BuildContext context) {
+  Widget _buildLandscapeLayout(BuildContext context, bool isDark) {
     return Row(
       children: [
         Container(
           width: 48,
-          color: Colors.grey.shade50,
+          color: isDark ? const Color(0xFF2D2D44) : Colors.grey.shade50,
           child: Column(
             children: [
               const SizedBox(height: 4),
               IconButton(
-                icon: const Icon(Icons.arrow_back, size: 20),
+                icon: Icon(Icons.arrow_back, size: 20, color: isDark ? Colors.white : Colors.black),
                 onPressed: () => Navigator.pop(context),
                 tooltip: 'Назад',
                 padding: EdgeInsets.zero,
@@ -3690,29 +3946,32 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
               ),
               const SizedBox(height: 8),
               IconButton(
-                icon: Icon(_showTopicsPanel ? Icons.folder_open : Icons.folder_outlined, size: 20),
+                icon: Icon(_showTopicsPanel ? Icons.folder_open : Icons.folder_outlined, size: 20, color: isDark ? Colors.white : Colors.black),
                 onPressed: _toggleTopicsPanel,
                 tooltip: 'Темы',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
               const Spacer(),
-              IconButton(
+              PopupMenuButton<String>(
                 icon: Text(
-                  _selectedLanguage == 'en' ? '🇬🇧' : '🇪🇸',
+                  getLanguageFlag(_selectedLanguage),
                   style: const TextStyle(fontSize: 18),
                 ),
-                onPressed: () {
+                onSelected: (value) {
                   setState(() {
-                    _selectedLanguage = _selectedLanguage == 'en' ? 'es' : 'en';
+                    _selectedLanguage = value;
                     if (_currentWord != null) {
                       _startTraining();
                     }
                   });
                 },
-                tooltip: 'Сменить язык',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                itemBuilder: (context) => [
+                  PopupMenuItem(value: 'en', child: Text('${getLanguageFlag('en')} ${getLanguageName('en')}')),
+                  PopupMenuItem(value: 'es', child: Text('${getLanguageFlag('es')} ${getLanguageName('es')}')),
+                  PopupMenuItem(value: 'de', child: Text('${getLanguageFlag('de')} ${getLanguageName('de')}')),
+                  PopupMenuItem(value: 'it', child: Text('${getLanguageFlag('it')} ${getLanguageName('it')}')),
+                ],
               ),
               const SizedBox(height: 4),
             ],
@@ -3721,23 +3980,23 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
 
         Expanded(
           child: _currentWord != null
-              ? _buildLandscapeTrainingContent()
+              ? _buildLandscapeTrainingContent(isDark)
               : _feedback.isNotEmpty
-              ? _buildCompletionScreen(true)
-              : _buildLandscapeStartScreen(),
+              ? _buildCompletionScreen(true, isDark)
+              : _buildLandscapeStartScreen(isDark),
         ),
 
         if (_showTopicsPanel)
           Container(
             width: 200,
-            color: Colors.grey.shade50,
-            child: _buildTopicsPanel(true),
+            color: isDark ? const Color(0xFF2D2D44) : Colors.grey.shade50,
+            child: _buildTopicsPanel(true, isDark),
           ),
       ],
     );
   }
 
-  Widget _buildLandscapeStartScreen() {
+  Widget _buildLandscapeStartScreen(bool isDark) {
     return Padding(
       padding: const EdgeInsets.all(12.0),
       child: Column(
@@ -3755,7 +4014,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                 : 'Выберите темы и начните тренировку',
             style: TextStyle(
               fontSize: 13,
-              color: Colors.grey.shade600,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
             ),
             textAlign: TextAlign.center,
           ),
@@ -3773,7 +4032,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
     );
   }
 
-  Widget _buildLandscapeTrainingContent() {
+  Widget _buildLandscapeTrainingContent(bool isDark) {
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Column(
@@ -3783,7 +4042,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
               Expanded(
                 child: LinearProgressIndicator(
                   value: (_currentIndex + 1) / _trainingWords.length,
-                  backgroundColor: Colors.grey.shade200,
+                  backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
                 ),
               ),
@@ -3792,7 +4051,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                 '${_currentIndex + 1}/${_trainingWords.length}',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey.shade600,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                 ),
               ),
               const SizedBox(width: 8),
@@ -3836,7 +4095,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            'Напишите слово на ${_selectedLanguage == 'en' ? 'английском' : 'испанском'}:',
+                            'Напишите слово на ${getLanguageNameForGrammar(_selectedLanguage)}:',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.white.withValues(alpha: 0.9),
@@ -3869,9 +4128,19 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                         TextField(
                           controller: _controller,
                           focusNode: _focusNode,
+                          style: TextStyle(color: isDark ? Colors.white : Colors.black),
                           decoration: InputDecoration(
                             hintText: 'Введите слово',
-                            border: const OutlineInputBorder(),
+                            hintStyle: TextStyle(color: isDark ? Colors.grey.shade500 : Colors.grey),
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide(color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: isDark ? Colors.blue.shade300 : Colors.blue),
+                            ),
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 12.0,
                               vertical: 12.0,
@@ -3943,7 +4212,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
     );
   }
 
-  Widget _buildTopicsPanel(bool isLandscape) {
+  Widget _buildTopicsPanel(bool isLandscape, bool isDark) {
     if (_topics.isEmpty) {
       return Center(
         child: Padding(
@@ -3952,7 +4221,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
             'Нет доступных тем\nДобавьте слова через words_data.dart',
             style: TextStyle(
               fontSize: isLandscape ? 11 : 14,
-              color: Colors.grey.shade600,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
             ),
             textAlign: TextAlign.center,
           ),
@@ -3974,10 +4243,11 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, size: 18),
+                  icon: Icon(Icons.close, size: 18, color: isDark ? Colors.white70 : Colors.grey),
                   onPressed: _toggleTopicsPanel,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
@@ -3993,7 +4263,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     minimumSize: Size.zero,
                   ),
-                  child: const Text('Все', style: TextStyle(fontSize: 11)),
+                  child: Text('Все', style: TextStyle(fontSize: 11, color: isDark ? Colors.blue.shade300 : null)),
                 ),
                 TextButton(
                   onPressed: () => _selectAllTopics(false),
@@ -4001,7 +4271,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     minimumSize: Size.zero,
                   ),
-                  child: const Text('Снять', style: TextStyle(fontSize: 11)),
+                  child: Text('Снять', style: TextStyle(fontSize: 11, color: isDark ? Colors.blue.shade300 : null)),
                 ),
               ],
             ),
@@ -4009,7 +4279,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
             Expanded(
               child: ListView(
                 children: _topics.map((topic) => CheckboxListTile(
-                  title: Text(topic, style: const TextStyle(fontSize: 12)),
+                  title: Text(topic, style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87)),
                   value: _selectedTopics[topic] ?? false,
                   onChanged: (bool? value) {
                     setState(() {
@@ -4020,6 +4290,8 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                   visualDensity: VisualDensity.compact,
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: EdgeInsets.zero,
+                  checkColor: isDark ? Colors.black : null,
+                  activeColor: isDark ? Colors.blue.shade300 : null,
                 )).toList(),
               ),
             ),
@@ -4055,6 +4327,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
               ),
             ),
             const SizedBox(height: 12),
@@ -4062,12 +4335,12 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
               children: [
                 TextButton(
                   onPressed: () => _selectAllTopics(true),
-                  child: const Text('Выбрать все', style: TextStyle(fontSize: 15)),
+                  child: Text('Выбрать все', style: TextStyle(fontSize: 15, color: isDark ? Colors.blue.shade300 : null)),
                 ),
                 const SizedBox(width: 8),
                 TextButton(
                   onPressed: () => _selectAllTopics(false),
-                  child: const Text('Снять все', style: TextStyle(fontSize: 15)),
+                  child: Text('Снять все', style: TextStyle(fontSize: 15, color: isDark ? Colors.blue.shade300 : null)),
                 ),
               ],
             ),
@@ -4075,7 +4348,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
             Expanded(
               child: ListView(
                 children: _topics.map((topic) => CheckboxListTile(
-                  title: Text(topic, style: const TextStyle(fontSize: 16)),
+                  title: Text(topic, style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
                   value: _selectedTopics[topic] ?? false,
                   onChanged: (bool? value) {
                     setState(() {
@@ -4083,6 +4356,8 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                     });
                   },
                   controlAffinity: ListTileControlAffinity.leading,
+                  checkColor: isDark ? Colors.black : null,
+                  activeColor: isDark ? Colors.blue.shade300 : null,
                 )).toList(),
               ),
             ),
@@ -4110,7 +4385,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
     }
   }
 
-  Widget _buildCompletionScreen(bool isLandscape) {
+  Widget _buildCompletionScreen(bool isLandscape, bool isDark) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -4128,6 +4403,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
               style: TextStyle(
                 fontSize: isLandscape ? 16 : 28,
                 fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
               ),
             ),
             SizedBox(height: isLandscape ? 4 : 16),
@@ -4135,7 +4411,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
               'Правильных ответов: $_correctAnswers из $_totalAnswers',
               style: TextStyle(
                 fontSize: isLandscape ? 12 : 20,
-                color: Colors.grey.shade700,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
               ),
             ),
             SizedBox(height: isLandscape ? 12 : 30),
@@ -4209,11 +4485,10 @@ class _ProgressPageState extends State<ProgressPage> {
 
   Future<void> _checkFirstLaunch() async {
     await Future.delayed(const Duration(milliseconds: 100));
-    if (mounted) {
-      final shouldShow = await TutorialService.shouldShowProgressTutorial();
-      if (shouldShow) {
-        TutorialService.showProgressTutorial(context);
-      }
+    if (!mounted) return;
+    final shouldShow = await TutorialService.shouldShowProgressTutorial();
+    if (shouldShow && mounted) {
+      TutorialService.showProgressTutorial(context);
     }
   }
 
@@ -4356,25 +4631,28 @@ class _ProgressPageState extends State<ProgressPage> {
   void _showRepeatOptions(String topic) {
     final mediaQuery = MediaQuery.of(context);
     final isLandscape = mediaQuery.orientation == Orientation.landscape;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (isLandscape) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF2D2D44) : Colors.white,
           contentPadding: const EdgeInsets.all(16),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 'Повторить тему "$topic"',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black87,
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
-              const Divider(height: 1),
+              Divider(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
               const SizedBox(height: 12),
               _buildRepeatOptionButton(
                 icon: Icons.edit_note,
@@ -4390,6 +4668,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   );
                 },
                 isLandscape: true,
+                isDark: isDark,
               ),
               const SizedBox(height: 8),
               _buildRepeatOptionButton(
@@ -4406,6 +4685,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   );
                 },
                 isLandscape: true,
+                isDark: isDark,
               ),
               const SizedBox(height: 8),
               _buildRepeatOptionButton(
@@ -4422,6 +4702,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   );
                 },
                 isLandscape: true,
+                isDark: isDark,
               ),
             ],
           ),
@@ -4430,6 +4711,7 @@ class _ProgressPageState extends State<ProgressPage> {
     } else {
       showModalBottomSheet(
         context: context,
+        backgroundColor: isDark ? const Color(0xFF2D2D44) : Colors.white,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -4442,16 +4724,17 @@ class _ProgressPageState extends State<ProgressPage> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                  color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               const SizedBox(height: 20),
               Text(
                 'Повторить тему "$topic"',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black87,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -4460,7 +4743,7 @@ class _ProgressPageState extends State<ProgressPage> {
                 'Выберите способ повторения:',
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.grey.shade600,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                 ),
               ),
               const SizedBox(height: 20),
@@ -4478,6 +4761,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   );
                 },
                 isLandscape: false,
+                isDark: isDark,
               ),
               const SizedBox(height: 12),
               _buildRepeatOptionButton(
@@ -4494,6 +4778,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   );
                 },
                 isLandscape: false,
+                isDark: isDark,
               ),
               const SizedBox(height: 12),
               _buildRepeatOptionButton(
@@ -4510,6 +4795,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   );
                 },
                 isLandscape: false,
+                isDark: isDark,
               ),
               const SizedBox(height: 16),
             ],
@@ -4525,6 +4811,7 @@ class _ProgressPageState extends State<ProgressPage> {
     required Color color,
     required VoidCallback onTap,
     required bool isLandscape,
+    required bool isDark,
   }) {
     if (isLandscape) {
       return GestureDetector(
@@ -4532,9 +4819,9 @@ class _ProgressPageState extends State<ProgressPage> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
+            color: isDark ? color.withValues(alpha: 0.15) : color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
+            border: Border.all(color: isDark ? color.withValues(alpha: 0.5) : color.withValues(alpha: 0.3), width: 1.5),
           ),
           child: Row(
             children: [
@@ -4550,7 +4837,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: color,
+                    color: isDark ? Colors.white : color,
                   ),
                 ),
               ),
@@ -4569,9 +4856,9 @@ class _ProgressPageState extends State<ProgressPage> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
+            color: isDark ? color.withValues(alpha: 0.15) : color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
+            border: Border.all(color: isDark ? color.withValues(alpha: 0.5) : color.withValues(alpha: 0.3), width: 1.5),
           ),
           child: Row(
             children: [
@@ -4586,7 +4873,7 @@ class _ProgressPageState extends State<ProgressPage> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: color,
+                  color: isDark ? Colors.white : color,
                 ),
               ),
               const Spacer(),
@@ -4606,6 +4893,7 @@ class _ProgressPageState extends State<ProgressPage> {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final isLandscape = mediaQuery.orientation == Orientation.landscape;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -4623,9 +4911,12 @@ class _ProgressPageState extends State<ProgressPage> {
           ),
           DropdownButton<String>(
             value: _selectedLanguage,
-            items: const [
-              DropdownMenuItem(value: 'en', child: Text('🇬🇧 Английский')),
-              DropdownMenuItem(value: 'es', child: Text('🇪🇸 Испанский')),
+            dropdownColor: isDark ? const Color(0xFF2D2D44) : Colors.white,
+            items: [
+              DropdownMenuItem(value: 'en', child: Text('${getLanguageFlag('en')} ${getLanguageName('en')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'es', child: Text('${getLanguageFlag('es')} ${getLanguageName('es')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'de', child: Text('${getLanguageFlag('de')} ${getLanguageName('de')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'it', child: Text('${getLanguageFlag('it')} ${getLanguageName('it')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
             ],
             onChanged: (value) {
               if (value != null) _changeLanguage(value);
@@ -4636,11 +4927,11 @@ class _ProgressPageState extends State<ProgressPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _buildContent(isLandscape),
+          : _buildContent(isLandscape, isDark),
     );
   }
 
-  Widget _buildContent(bool isLandscape) {
+  Widget _buildContent(bool isLandscape, bool isDark) {
     final totalWords = _overallStats['totalWords'] ?? 0;
     final totalCorrect = _overallStats['totalCorrect'] ?? 0;
     final totalWrong = _overallStats['totalWrong'] ?? 0;
@@ -4812,7 +5103,7 @@ class _ProgressPageState extends State<ProgressPage> {
               style: TextStyle(
                 fontSize: isLandscape ? 16 : 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.teal.shade800,
+                color: isDark ? Colors.teal.shade300 : Colors.teal.shade800,
               ),
             ),
             const SizedBox(width: 8),
@@ -4820,7 +5111,7 @@ class _ProgressPageState extends State<ProgressPage> {
               '(${_topics.length})',
               style: TextStyle(
                 fontSize: isLandscape ? 13 : 16,
-                color: Colors.grey.shade600,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
               ),
             ),
           ],
@@ -4833,23 +5124,23 @@ class _ProgressPageState extends State<ProgressPage> {
               padding: const EdgeInsets.all(32.0),
               child: Column(
                 children: [
-                  Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
+                  Icon(Icons.inbox, size: 64, color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
                   const SizedBox(height: 16),
                   Text(
                     'Нет доступных тем',
-                    style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+                    style: TextStyle(fontSize: 18, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Добавьте слова через words_data.dart',
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                    style: TextStyle(fontSize: 14, color: isDark ? Colors.grey.shade500 : Colors.grey.shade500),
                   ),
                 ],
               ),
             ),
           )
         else
-          ..._topics.map((topic) => _buildTopicCard(topic, isLandscape)),
+          ..._topics.map((topic) => _buildTopicCard(topic, isLandscape, isDark)),
       ],
     );
   }
@@ -4878,7 +5169,7 @@ class _ProgressPageState extends State<ProgressPage> {
     );
   }
 
-  Widget _buildTopicCard(String topic, bool isLandscape) {
+  Widget _buildTopicCard(String topic, bool isLandscape, bool isDark) {
     final stats = _topicStats[topic] ?? {};
     final totalWords = stats['totalWords'] ?? 0;
     final learnedWords = stats['learnedWords'] ?? 0;
@@ -4907,12 +5198,12 @@ class _ProgressPageState extends State<ProgressPage> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF2D2D44) : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.shade100,
+              color: isDark ? Colors.black26 : Colors.grey.shade100,
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -4926,7 +5217,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: Colors.teal.shade50,
+                    color: isDark ? Colors.teal.withValues(alpha: 0.15) : Colors.teal.shade50,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
@@ -4935,7 +5226,7 @@ class _ProgressPageState extends State<ProgressPage> {
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Colors.teal.shade700,
+                        color: isDark ? Colors.teal.shade300 : Colors.teal.shade700,
                       ),
                     ),
                   ),
@@ -4950,13 +5241,14 @@ class _ProgressPageState extends State<ProgressPage> {
                         style: TextStyle(
                           fontSize: isLandscape ? 16 : 18,
                           fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black87,
                         ),
                       ),
                       Text(
                         'Выучено: $learnedWords из $totalWords',
                         style: TextStyle(
                           fontSize: isLandscape ? 11 : 13,
-                          color: Colors.grey.shade600,
+                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                         ),
                       ),
                     ],
@@ -4991,7 +5283,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
-                const Icon(Icons.chevron_right, color: Colors.grey),
+                Icon(Icons.chevron_right, color: isDark ? Colors.grey.shade400 : Colors.grey),
               ],
             ),
             const SizedBox(height: 12),
@@ -5008,7 +5300,7 @@ class _ProgressPageState extends State<ProgressPage> {
                             'Прогресс',
                             style: TextStyle(
                               fontSize: isLandscape ? 11 : 13,
-                              color: Colors.grey.shade600,
+                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                             ),
                           ),
                           Text(
@@ -5024,7 +5316,7 @@ class _ProgressPageState extends State<ProgressPage> {
                       const SizedBox(height: 4),
                       LinearProgressIndicator(
                         value: progressPercent / 100,
-                        backgroundColor: Colors.grey.shade200,
+                        backgroundColor: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
                         valueColor: const AlwaysStoppedAnimation<Color>(Colors.teal),
                       ),
                     ],
@@ -5042,7 +5334,7 @@ class _ProgressPageState extends State<ProgressPage> {
                             'Точность',
                             style: TextStyle(
                               fontSize: isLandscape ? 11 : 13,
-                              color: Colors.grey.shade600,
+                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                             ),
                           ),
                           Text(
@@ -5058,7 +5350,7 @@ class _ProgressPageState extends State<ProgressPage> {
                       const SizedBox(height: 4),
                       LinearProgressIndicator(
                         value: accuracyPercent / 100,
-                        backgroundColor: Colors.grey.shade200,
+                        backgroundColor: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.teal.shade300),
                       ),
                     ],
@@ -5247,6 +5539,7 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
     final accuracyPercent = (totalCorrect + totalWrong) > 0
         ? (totalCorrect / (totalCorrect + totalWrong) * 100)
         : 0;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -5258,7 +5551,7 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
             tooltip: 'Сбросить прогресс всех слов в теме',
           ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.sort),
+            icon: Icon(Icons.sort, color: isDark ? Colors.white : Colors.black),
             onSelected: (value) {
               setState(() {
                 _sortBy = value;
@@ -5280,16 +5573,16 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.teal.shade50,
+            color: isDark ? Colors.teal.withValues(alpha: 0.15) : Colors.teal.shade50,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _buildCompactStat('📚', '$totalWords'),
-                _buildCompactStat('✅', '$learnedWords'),
-                _buildCompactStat('📊', '${progressPercent.toStringAsFixed(0)}%'),
-                _buildCompactStat('✓', '$totalCorrect'),
-                _buildCompactStat('✗', '$totalWrong'),
-                _buildCompactStat('🎯', '${accuracyPercent.toStringAsFixed(0)}%'),
+                _buildCompactStat('📚', '$totalWords', isDark),
+                _buildCompactStat('✅', '$learnedWords', isDark),
+                _buildCompactStat('📊', '${progressPercent.toStringAsFixed(0)}%', isDark),
+                _buildCompactStat('✓', '$totalCorrect', isDark),
+                _buildCompactStat('✗', '$totalWrong', isDark),
+                _buildCompactStat('🎯', '${accuracyPercent.toStringAsFixed(0)}%', isDark),
               ],
             ),
           ),
@@ -5299,11 +5592,11 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
+                  Icon(Icons.search_off, size: 64, color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
                   const SizedBox(height: 16),
                   Text(
                     'Нет слов в этой теме',
-                    style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+                    style: TextStyle(fontSize: 18, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                   ),
                 ],
               ),
@@ -5318,6 +5611,7 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
                     : 0;
 
                 return Card(
+                  color: isDark ? const Color(0xFF2D2D44) : Colors.white,
                   margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   child: ListTile(
                     leading: CircleAvatar(
@@ -5333,7 +5627,7 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
                         Expanded(
                           child: Text(
                             word.word,
-                            style: const TextStyle(fontWeight: FontWeight.w500),
+                            style: TextStyle(fontWeight: FontWeight.w500, color: isDark ? Colors.white : Colors.black87),
                           ),
                         ),
                         Container(
@@ -5357,7 +5651,7 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
                       children: [
                         Text(
                           word.translation,
-                          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                          style: TextStyle(fontSize: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                         ),
                         const SizedBox(height: 4),
                         Row(
@@ -5366,19 +5660,19 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
                             const SizedBox(width: 4),
                             Text(
                               '${word.correctCount}',
-                              style: TextStyle(fontSize: 12, color: Colors.green.shade600),
+                              style: TextStyle(fontSize: 12, color: isDark ? Colors.green.shade300 : Colors.green.shade600),
                             ),
                             const SizedBox(width: 12),
                             Icon(Icons.cancel, size: 14, color: Colors.red.shade400),
                             const SizedBox(width: 4),
                             Text(
                               '${word.wrongCount}',
-                              style: TextStyle(fontSize: 12, color: Colors.red.shade600),
+                              style: TextStyle(fontSize: 12, color: isDark ? Colors.red.shade300 : Colors.red.shade600),
                             ),
                             const SizedBox(width: 12),
                             Text(
                               'Точность: $accuracy%',
-                              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                              style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade500),
                             ),
                           ],
                         ),
@@ -5429,14 +5723,14 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
     );
   }
 
-  Widget _buildCompactStat(String icon, String value) {
+  Widget _buildCompactStat(String icon, String value, bool isDark) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(icon, style: const TextStyle(fontSize: 14)),
         Text(
           value,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.teal.shade300 : Colors.teal),
         ),
       ],
     );

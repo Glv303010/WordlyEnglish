@@ -2,7 +2,10 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart';
 import 'dart:io';
-import '../data/words_data.dart';
+import '../data/words_en.dart';
+import '../data/words_es.dart';
+import '../data/words_de.dart';
+import '../data/words_it.dart';
 import '../main.dart' show Word;
 
 class DatabaseService {
@@ -66,8 +69,19 @@ class DatabaseService {
   }
 
   Future<void> _insertInitialData(Database db) async {
-    for (var word in initialWords) {
-      await db.insert('words', word);
+    // Загружаем слова для всех языков
+    await _insertWordsForLanguage(db, wordsEn, 'en');
+    await _insertWordsForLanguage(db, wordsEs, 'es');
+    await _insertWordsForLanguage(db, wordsDe, 'de');
+    await _insertWordsForLanguage(db, wordsIt, 'it');
+  }
+
+  Future<void> _insertWordsForLanguage(Database db, List<Map<String, dynamic>> words, String language) async {
+    for (var word in words) {
+      // Добавляем язык к каждому слову перед вставкой
+      final wordWithLang = Map<String, dynamic>.from(word);
+      wordWithLang['language'] = language;
+      await db.insert('words', wordWithLang);
     }
   }
 
