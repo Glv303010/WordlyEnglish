@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Импорт для базы данных
 import 'database/database_service.dart';
@@ -13,7 +14,7 @@ class LanguageLearningApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'WordlyEnglish',
+      title: 'Словко',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,
@@ -90,11 +91,465 @@ class Word {
 }
 
 // ============================================================
+// СЕРВИС ДЛЯ УПРАВЛЕНИЯ ПОДСКАЗКАМИ
+// ============================================================
+
+class TutorialService {
+  static const String _keyMainTutorialShown = 'main_tutorial_shown';
+  static const String _keyProgressTutorialShown = 'progress_tutorial_shown';
+
+  static Future<bool> shouldShowMainTutorial() async {
+    final prefs = await SharedPreferences.getInstance();
+    final shown = prefs.getBool(_keyMainTutorialShown) ?? false;
+    if (!shown) {
+      await prefs.setBool(_keyMainTutorialShown, true);
+      return true;
+    }
+    return false;
+  }
+
+  static Future<bool> shouldShowProgressTutorial() async {
+    final prefs = await SharedPreferences.getInstance();
+    final shown = prefs.getBool(_keyProgressTutorialShown) ?? false;
+    if (!shown) {
+      await prefs.setBool(_keyProgressTutorialShown, true);
+      return true;
+    }
+    return false;
+  }
+
+  static Future<void> markMainTutorialShown() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyMainTutorialShown, true);
+  }
+
+  static Future<void> markProgressTutorialShown() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyProgressTutorialShown, true);
+  }
+
+  static void showMainTutorial(BuildContext context, {bool forceShow = false}) {
+    showDialog(
+      context: context,
+      builder: (context) => _MainTutorialDialog(),
+    );
+  }
+
+  static void showProgressTutorial(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => _ProgressTutorialDialog(),
+    );
+  }
+}
+
+// ============================================================
+// ДИАЛОГ ПОДСКАЗКИ ДЛЯ ГЛАВНОЙ СТРАНИЦЫ
+// ============================================================
+
+class _MainTutorialDialog extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        width: isLandscape ? 500 : null,
+        constraints: BoxConstraints(
+          maxHeight: isLandscape ? MediaQuery.of(context).size.height * 0.8 : double.infinity,
+        ),
+        padding: EdgeInsets.all(isLandscape ? 16 : 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.lightbulb, color: Colors.amber, size: isLandscape ? 22 : 28),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Добро пожаловать в Словко!',
+                    style: TextStyle(
+                      fontSize: isLandscape ? 16 : 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.close, size: isLandscape ? 18 : 22),
+                  onPressed: () => Navigator.pop(context),
+                  padding: EdgeInsets.zero,
+                  constraints: BoxConstraints(minWidth: 30, minHeight: 30),
+                ),
+              ],
+            ),
+            SizedBox(height: isLandscape ? 12 : 20),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildSection(
+                      icon: Icons.menu_book,
+                      color: Colors.blue,
+                      title: 'СЛОВАРЬ',
+                      description: 'Просматривайте все слова по темам и языкам',
+                      isLandscape: isLandscape,
+                    ),
+                    SizedBox(height: isLandscape ? 8 : 16),
+                    _buildSection(
+                      icon: Icons.fitness_center,
+                      color: Colors.green,
+                      title: 'ТРЕНИРОВКИ',
+                      description: 'Здесь происходит основное изучение слов. Доступны три режима:',
+                      isLandscape: isLandscape,
+                    ),
+                    Padding(
+                      padding: EdgeInsets.only(left: isLandscape ? 30 : 40, top: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildSubItem('ТРЕНАЖЁР', '— вводите перевод самостоятельно'),
+                          _buildSubItem('ВЫБОР ПЕРЕВОДА', '— выбирайте из 4 вариантов'),
+                          _buildSubItem('С РУССКОГО', '— переводите на изучаемый язык'),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: isLandscape ? 8 : 16),
+                    _buildSection(
+                      icon: Icons.insights,
+                      color: Colors.teal,
+                      title: 'ПРОГРЕСС',
+                      description: 'Отслеживайте статистику изучения. Нажмите на тему — увидите детали по каждому слову',
+                      isLandscape: isLandscape,
+                    ),
+                    SizedBox(height: isLandscape ? 8 : 16),
+                    Container(
+                      padding: EdgeInsets.all(isLandscape ? 8 : 12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.blue.shade700, size: isLandscape ? 16 : 20),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Нажмите на кнопку "?" справа вверху, чтобы снова увидеть эту подсказку',
+                              style: TextStyle(
+                                fontSize: isLandscape ? 11 : 13,
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: isLandscape ? 12 : 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(vertical: isLandscape ? 10 : 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(
+                  'ПОНЯТНО',
+                  style: TextStyle(fontSize: isLandscape ? 14 : 16, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSection({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String description,
+    required bool isLandscape,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: isLandscape ? 32 : 40,
+          height: isLandscape ? 32 : 40,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: isLandscape ? 18 : 22),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: isLandscape ? 13 : 15,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: isLandscape ? 11 : 13,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubItem(String title, String description) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        children: [
+          Text('• ', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                children: [
+                  TextSpan(text: title, style: TextStyle(fontWeight: FontWeight.w500, color: Colors.grey.shade800)),
+                  TextSpan(text: description),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// ДИАЛОГ ПОДСКАЗКИ ДЛЯ СТРАНИЦЫ ПРОГРЕССА
+// ============================================================
+
+class _ProgressTutorialDialog extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        width: isLandscape ? 450 : null,
+        constraints: BoxConstraints(
+          maxHeight: isLandscape ? MediaQuery.of(context).size.height * 0.8 : double.infinity,
+        ),
+        padding: EdgeInsets.all(isLandscape ? 16 : 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.tips_and_updates, color: Colors.teal, size: isLandscape ? 22 : 28),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Как использовать раздел ПРОГРЕСС',
+                    style: TextStyle(
+                      fontSize: isLandscape ? 16 : 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.close, size: isLandscape ? 18 : 22),
+                  onPressed: () => Navigator.pop(context),
+                  padding: EdgeInsets.zero,
+                  constraints: BoxConstraints(minWidth: 30, minHeight: 30),
+                ),
+              ],
+            ),
+            SizedBox(height: isLandscape ? 12 : 20),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildTip(
+                      icon: Icons.touch_app,
+                      title: 'Просмотр деталей',
+                      description: 'Нажмите на карточку темы, чтобы увидеть подробную статистику по каждому слову',
+                      isLandscape: isLandscape,
+                    ),
+                    SizedBox(height: isLandscape ? 8 : 16),
+                    _buildTip(
+                      icon: Icons.repeat,
+                      title: 'Повторение темы',
+                      description: 'Нажмите на иконку 🔄 в карточке темы, чтобы быстро перейти к повторению этой темы',
+                      isLandscape: isLandscape,
+                    ),
+                    SizedBox(height: isLandscape ? 4 : 8),
+                    Padding(
+                      padding: EdgeInsets.only(left: isLandscape ? 30 : 40),
+                      child: Text(
+                        'Можно выбрать любой из трёх режимов: Тренажёр, Выбор перевода или С русского',
+                        style: TextStyle(
+                          fontSize: isLandscape ? 11 : 12,
+                          color: Colors.grey.shade600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: isLandscape ? 8 : 16),
+                    _buildTip(
+                      icon: Icons.delete_outline,
+                      title: 'Сброс прогресса',
+                      description: 'Красная иконка 🗑️ позволяет сбросить прогресс по теме или отдельному слову',
+                      isLandscape: isLandscape,
+                    ),
+                    SizedBox(height: isLandscape ? 12 : 16),
+                    Container(
+                      padding: EdgeInsets.all(isLandscape ? 8 : 12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.warning_amber, color: Colors.orange.shade700, size: isLandscape ? 16 : 20),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Прогресс обновляется автоматически после каждой тренировки',
+                              style: TextStyle(
+                                fontSize: isLandscape ? 11 : 12,
+                                color: Colors.orange.shade800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: isLandscape ? 12 : 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(vertical: isLandscape ? 10 : 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(
+                  'ПОНЯТНО',
+                  style: TextStyle(fontSize: isLandscape ? 14 : 16, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTip({
+    required IconData icon,
+    required String title,
+    required String description,
+    required bool isLandscape,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: isLandscape ? 28 : 32,
+          height: isLandscape ? 28 : 32,
+          decoration: BoxDecoration(
+            color: Colors.teal.shade50,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: Colors.teal.shade700, size: isLandscape ? 16 : 18),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: isLandscape ? 13 : 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.teal.shade800,
+                ),
+              ),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: isLandscape ? 11 : 13,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================
 // ГЛАВНАЯ СТРАНИЦА
 // ============================================================
 
-class MainPage extends StatelessWidget {
+class MainPage extends StatefulWidget {
   const MainPage({super.key});
+
+  @override
+  State<MainPage> createState() => _MainPageState();
+}
+
+class _MainPageState extends State<MainPage> {
+  @override
+  void initState() {
+    super.initState();
+    _checkFirstLaunch();
+  }
+
+  Future<void> _checkFirstLaunch() async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (mounted) {
+      final shouldShow = await TutorialService.shouldShowMainTutorial();
+      if (shouldShow) {
+        TutorialService.showMainTutorial(context);
+      }
+    }
+  }
+
+  void _showTutorial() {
+    TutorialService.showMainTutorial(context, forceShow: true);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -117,26 +572,29 @@ class MainPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Stack(
+            alignment: Alignment.center,
             children: [
-              Text(
-                '9:30',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[600],
-                ),
+              const SizedBox(
+                width: double.infinity,
+                height: 40,
               ),
               Text(
-                'WordlyEnglish',
+                'Словко',
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Colors.blue[800],
+                  color: Colors.blue.shade800,
                 ),
               ),
-              const SizedBox(width: 40),
+              Positioned(
+                right: 0,
+                child: IconButton(
+                  icon: Icon(Icons.help_outline, color: Colors.blue.shade600, size: 26),
+                  onPressed: _showTutorial,
+                  tooltip: 'Показать подсказку',
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 40),
@@ -223,26 +681,29 @@ class MainPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Stack(
+            alignment: Alignment.center,
             children: [
-              Text(
-                '9:30',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[600],
-                ),
+              const SizedBox(
+                width: double.infinity,
+                height: 32,
               ),
               Text(
-                'WordlyEnglish',
+                'Словко',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Colors.blue[800],
+                  color: Colors.blue.shade800,
                 ),
               ),
-              const SizedBox(width: 40),
+              Positioned(
+                right: 0,
+                child: IconButton(
+                  icon: Icon(Icons.help_outline, color: Colors.blue.shade600, size: 22),
+                  onPressed: _showTutorial,
+                  tooltip: 'Показать подсказку',
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -3743,6 +4204,17 @@ class _ProgressPageState extends State<ProgressPage> {
   void initState() {
     super.initState();
     _loadData();
+    _checkFirstLaunch();
+  }
+
+  Future<void> _checkFirstLaunch() async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (mounted) {
+      final shouldShow = await TutorialService.shouldShowProgressTutorial();
+      if (shouldShow) {
+        TutorialService.showProgressTutorial(context);
+      }
+    }
   }
 
   Future<void> _loadData() async {
@@ -3886,7 +4358,6 @@ class _ProgressPageState extends State<ProgressPage> {
     final isLandscape = mediaQuery.orientation == Orientation.landscape;
 
     if (isLandscape) {
-      // Для горизонтального режима - компактный AlertDialog
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -3957,7 +4428,6 @@ class _ProgressPageState extends State<ProgressPage> {
         ),
       );
     } else {
-      // Для вертикального режима - BottomSheet
       showModalBottomSheet(
         context: context,
         shape: const RoundedRectangleBorder(
@@ -4141,6 +4611,11 @@ class _ProgressPageState extends State<ProgressPage> {
       appBar: AppBar(
         title: const Text('ПРОГРЕСС'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.help_outline, color: Colors.blue),
+            onPressed: () => TutorialService.showProgressTutorial(context),
+            tooltip: 'Показать подсказку',
+          ),
           IconButton(
             icon: const Icon(Icons.delete_sweep, color: Colors.red),
             onPressed: _resetAllProgress,
