@@ -92,7 +92,26 @@ class _LanguageLearningAppState extends State<LanguageLearningApp> {
   }
 }
 
-// Модель слова
+// ============================================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// ============================================================
+
+// Функция для нормализации текста (замена ё на е)
+String normalizeText(String text) {
+  return text
+      .toLowerCase()
+      .replaceAll('ё', 'е')
+      .replaceAll('Ё', 'Е')
+      .trim();
+}
+
+// Функция для сравнения ответов с учетом ё/е
+bool isAnswerCorrect(String userAnswer, String correctAnswer) {
+  return normalizeText(userAnswer) == normalizeText(correctAnswer);
+}
+
+// В main.dart найдите класс Word и замените его на эту версию:
+
 class Word {
   int? id;
   String word;
@@ -105,6 +124,8 @@ class Word {
   DateTime? lastReviewed;
   int? streak;
   DateTime? nextReviewDate;
+  int? totalAttempts;  // НОВОЕ ПОЛЕ
+  int? masteryLevel;   // НОВОЕ ПОЛЕ
 
   Word({
     this.id,
@@ -118,6 +139,8 @@ class Word {
     this.lastReviewed,
     this.streak = 0,
     this.nextReviewDate,
+    this.totalAttempts = 0,   // НОВОЕ ПОЛЕ
+    this.masteryLevel = 0,     // НОВОЕ ПОЛЕ
   });
 
   Map<String, dynamic> toMap() {
@@ -133,6 +156,8 @@ class Word {
       'lastReviewed': lastReviewed?.toIso8601String(),
       'streak': streak,
       'nextReviewDate': nextReviewDate?.toIso8601String(),
+      'totalAttempts': totalAttempts,   // НОВОЕ ПОЛЕ
+      'masteryLevel': masteryLevel,     // НОВОЕ ПОЛЕ
     };
   }
 
@@ -153,6 +178,8 @@ class Word {
       nextReviewDate: map['nextReviewDate'] != null
           ? DateTime.parse(map['nextReviewDate'])
           : null,
+      totalAttempts: map['totalAttempts'] ?? 0,
+      masteryLevel: map['masteryLevel'] ?? 0,
     );
   }
 }
@@ -1235,354 +1262,315 @@ class DictionaryPage extends StatefulWidget {
 class _DictionaryPageState extends State<DictionaryPage> {
   final DatabaseService _dbService = DatabaseService();
 
-  Map<String, List<Word>> _groupedWords = {};
-  List<String> _alphabetKeys = [];
   List<String> _topics = [];
   List<Word> _allWords = [];
-
   String _selectedLanguage = 'en';
-  String _selectedTopic = 'Все темы';
-  bool _showTopicFilter = false;
-
-  final ScrollController _scrollController = ScrollController();
-  final List<String> _alphabet = List.generate(26, (index) => String.fromCharCode(65 + index));
+  String? _selectedTopic; // null = показаны все слова (сетка тем)
+  bool _isLoading = true;
+  final TextEditingController _searchController = TextEditingController();
+  List<Word> _filteredWords = [];
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadTopics();
+    _searchController.addListener(_onSearchChanged);
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadTopics() async {
+    setState(() => _isLoading = true);
     _topics = await _dbService.getTopics();
-    await _loadWords();
+    await _loadAllWords();
   }
 
-  Future<void> _loadWords() async {
+  Future<void> _loadAllWords() async {
     List<Word> allWords = [];
-
-    if (_selectedTopic == 'Все темы') {
-      for (var topic in _topics) {
-        allWords.addAll(await _dbService.getWordsByTopic(topic, language: _selectedLanguage));
-      }
-    } else {
-      allWords = await _dbService.getWordsByTopic(_selectedTopic, language: _selectedLanguage);
+    for (var topic in _topics) {
+      allWords.addAll(await _dbService.getWordsByTopic(topic, language: _selectedLanguage));
     }
-
+    allWords.sort((a, b) => a.word.toLowerCase().compareTo(b.word.toLowerCase()));
     _allWords = allWords;
-    _groupWordsByLetter();
+    _filteredWords = allWords;
+    setState(() => _isLoading = false);
   }
 
-  void _groupWordsByLetter() {
-    _allWords.sort((a, b) => a.word.compareTo(b.word));
-    final Map<String, List<Word>> grouped = {};
+  Future<void> _loadWordsForTopic(String topic) async {
+    setState(() => _isLoading = true);
+    _selectedTopic = topic;
+    final words = await _dbService.getWordsByTopic(topic, language: _selectedLanguage);
+    words.sort((a, b) => a.word.toLowerCase().compareTo(b.word.toLowerCase()));
+    _filteredWords = words;
+    setState(() => _isLoading = false);
+  }
 
-    for (var word in _allWords) {
-      if (word.word.isEmpty) continue;
-      String firstLetter = word.word[0].toUpperCase();
-      if (!grouped.containsKey(firstLetter)) {
-        grouped[firstLetter] = [];
-      }
-      grouped[firstLetter]!.add(word);
-    }
+  void _onSearchChanged() {
+    final query = _searchController.text.toLowerCase().trim();
+    final sourceList = _selectedTopic != null
+        ? _filteredWords
+        : _allWords;
 
     setState(() {
-      _groupedWords = grouped;
-      _alphabetKeys = grouped.keys.toList()..sort();
+      if (query.isEmpty) {
+        _filteredWords = sourceList;
+      } else {
+        _filteredWords = sourceList
+            .where((w) => w.word.toLowerCase().contains(query) ||
+            w.translation.toLowerCase().contains(query))
+            .toList();
+      }
     });
   }
 
-  void _scrollToLetter(String letter) {
-    if (!_alphabetKeys.contains(letter)) return;
+  void _changeLanguage(String lang) {
+    setState(() {
+      _selectedLanguage = lang;
+      _selectedTopic = null;
+      _searchController.clear();
+      _loadTopics();
+    });
+  }
 
-    int index = _alphabetKeys.indexOf(letter);
-    if (index != -1) {
-      double position = 0;
-      for (int i = 0; i < index; i++) {
-        String currentLetter = _alphabetKeys[i];
-        int wordCount = _groupedWords[currentLetter]?.length ?? 0;
-        position += 40 + (wordCount * 60);
-      }
-
-      _scrollController.animateTo(
-        position,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    }
+  void _goBackToTopics() {
+    setState(() {
+      _selectedTopic = null;
+      _searchController.clear();
+      _filteredWords = _allWords;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final isLandscape = mediaQuery.orientation == Orientation.landscape;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('СЛОВАРЬ'),
+        title: Text(_selectedTopic ?? 'СЛОВАРЬ'),
+        leading: _selectedTopic != null
+            ? IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _goBackToTopics,
+        )
+            : null,
         actions: [
-          IconButton(
-            icon: Icon(_showTopicFilter ? Icons.filter_list : Icons.filter_list_off),
-            onPressed: () {
-              setState(() {
-                _showTopicFilter = !_showTopicFilter;
-              });
-            },
-            tooltip: 'Фильтр по темам',
-          ),
           DropdownButton<String>(
             value: _selectedLanguage,
             dropdownColor: isDark ? const Color(0xFF2D2D44) : Colors.white,
+            underline: const SizedBox(),
             items: [
-              DropdownMenuItem(value: 'en', child: Text('${getLanguageFlag('en')} ${getLanguageName('en')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
-              DropdownMenuItem(value: 'es', child: Text('${getLanguageFlag('es')} ${getLanguageName('es')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
-              DropdownMenuItem(value: 'de', child: Text('${getLanguageFlag('de')} ${getLanguageName('de')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
-              DropdownMenuItem(value: 'it', child: Text('${getLanguageFlag('it')} ${getLanguageName('it')}', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
+              DropdownMenuItem(value: 'en', child: Text('${getLanguageFlag('en')} ${getLanguageName('en')}')),
+              DropdownMenuItem(value: 'es', child: Text('${getLanguageFlag('es')} ${getLanguageName('es')}')),
+              DropdownMenuItem(value: 'de', child: Text('${getLanguageFlag('de')} ${getLanguageName('de')}')),
+              DropdownMenuItem(value: 'it', child: Text('${getLanguageFlag('it')} ${getLanguageName('it')}')),
             ],
             onChanged: (value) {
-              setState(() {
-                _selectedLanguage = value!;
-                _loadWords();
-              });
+              if (value != null) _changeLanguage(value);
             },
           ),
           const SizedBox(width: 8),
         ],
       ),
-      body: Column(
-        children: [
-          if (_showTopicFilter && _topics.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: isDark ? const Color(0xFF2D2D44) : Colors.grey.shade100,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Фильтр по теме:',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        FilterChip(
-                          label: const Text('Все темы'),
-                          selected: _selectedTopic == 'Все темы',
-                          onSelected: (selected) {
-                            setState(() {
-                              _selectedTopic = 'Все темы';
-                              _loadWords();
-                            });
-                          },
-                          backgroundColor: isDark ? const Color(0xFF3D3D5C) : null,
-                          selectedColor: isDark ? Colors.blue.shade700 : null,
-                          checkmarkColor: isDark ? Colors.white : null,
-                        ),
-                        const SizedBox(width: 8),
-                        ..._topics.map((topic) => Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: FilterChip(
-                            label: Text(topic),
-                            selected: _selectedTopic == topic,
-                            onSelected: (selected) {
-                              setState(() {
-                                _selectedTopic = topic;
-                                _loadWords();
-                              });
-                            },
-                            backgroundColor: isDark ? const Color(0xFF3D3D5C) : null,
-                            selectedColor: isDark ? Colors.blue.shade700 : null,
-                            checkmarkColor: isDark ? Colors.white : null,
-                          ),
-                        )),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          Expanded(
-            child: _allWords.isEmpty
-                ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.search_off,
-                    size: 64,
-                    color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Нет слов для отображения',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Выберите другую тему или язык',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
-                    ),
-                  ),
-                ],
-              ),
-            )
-                : Stack(
-              children: [
-                Padding(
-                  padding: EdgeInsets.only(
-                    right: isLandscape ? 40.0 : 30.0,
-                  ),
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    itemCount: _alphabetKeys.length,
-                    itemBuilder: (context, index) {
-                      final letter = _alphabetKeys[index];
-                      final words = _groupedWords[letter] ?? [];
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            color: isDark ? const Color(0xFF2D2D44) : Colors.grey.shade200,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16.0,
-                              vertical: 8.0,
-                            ),
-                            child: Row(
-                              children: [
-                                Text(
-                                  letter,
-                                  style: TextStyle(
-                                    fontSize: isLandscape ? 18.0 : 20.0,
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark ? Colors.blue.shade300 : Colors.blue.shade800,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '(${words.length})',
-                                  style: TextStyle(
-                                    fontSize: isLandscape ? 14.0 : 16.0,
-                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          ...words.map((word) => ListTile(
-                            title: Text(
-                              word.word,
-                              style: TextStyle(
-                                fontSize: isLandscape ? 14.0 : 16.0,
-                                color: isDark ? Colors.white : Colors.black87,
-                              ),
-                            ),
-                            subtitle: Text(
-                              word.translation,
-                              style: TextStyle(
-                                fontSize: isLandscape ? 12.0 : 14.0,
-                                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                              ),
-                            ),
-                            trailing: word.difficulty > 0.7
-                                ? Icon(
-                              Icons.warning_amber_rounded,
-                              color: Colors.orange,
-                              size: 20,
-                            )
-                                : null,
-                          ))
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: isLandscape ? 40.0 : 30.0,
-                    color: (isDark ? const Color(0xFF1E1E2E) : Colors.white).withValues(alpha: 0.9),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: _alphabet.map((letter) {
-                        final bool hasWords = _alphabetKeys.contains(letter);
-                        return Expanded(
-                          child: GestureDetector(
-                            onTap: hasWords ? () => _scrollToLetter(letter) : null,
-                            child: Container(
-                              color: Colors.transparent,
-                              child: Center(
-                                child: Text(
-                                  letter,
-                                  style: TextStyle(
-                                    fontSize: isLandscape ? 12.0 : 10.0,
-                                    fontWeight: hasWords ? FontWeight.bold : FontWeight.normal,
-                                    color: hasWords
-                                        ? (isDark ? Colors.blue.shade300 : Colors.blue.shade800)
-                                        : (isDark ? Colors.grey.shade700 : Colors.grey.shade400),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(8),
-            color: isDark ? const Color(0xFF2D2D44) : Colors.grey.shade100,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Всего слов: ${_allWords.length}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
-                  ),
-                ),
-                if (_selectedTopic != 'Все темы')
-                  Chip(
-                    label: Text(_selectedTopic, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                    onDeleted: () {
-                      setState(() {
-                        _selectedTopic = 'Все темы';
-                        _loadWords();
-                      });
-                    },
-                    backgroundColor: isDark ? const Color(0xFF3D3D5C) : null,
-                    deleteIconColor: isDark ? Colors.white70 : null,
-                  ),
-              ],
-            ),
-          ),
-        ],
+      body: SafeArea(
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _selectedTopic == null
+            ? _buildTopicsGrid(isDark, isLandscape)
+            : _buildWordsList(isDark, isLandscape),
       ),
+    );
+  }
+
+  Widget _buildTopicsGrid(bool isDark, bool isLandscape) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Поиск по всем словам...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                icon: const Icon(Icons.clear),
+                onPressed: () => _searchController.clear(),
+              )
+                  : null,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              filled: true,
+              fillColor: isDark ? const Color(0xFF2D2D44) : Colors.grey.shade100,
+            ),
+          ),
+        ),
+        if (_searchController.text.isNotEmpty && _filteredWords.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              'Найдено слов: ${_filteredWords.length}',
+              style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+            ),
+          ),
+        Expanded(
+          child: _searchController.text.isNotEmpty
+              ? _buildWordsListView(isDark, isLandscape)
+              : GridView.builder(
+            padding: EdgeInsets.all(isLandscape ? 8 : 12),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: isLandscape ? 4 : 2,
+              childAspectRatio: isLandscape ? 2.2 : 1.5,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+            ),
+            itemCount: _topics.length,
+            itemBuilder: (context, index) {
+              final topic = _topics[index];
+              return Card(
+                color: isDark ? const Color(0xFF2D2D44) : Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  side: BorderSide(
+                    color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
+                  ),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(15),
+                  onTap: () => _loadWordsForTopic(topic),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: isLandscape ? 40 : 50,
+                        height: isLandscape ? 40 : 50,
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: Text(
+                            topic.isNotEmpty ? topic[0].toUpperCase() : '?',
+                            style: TextStyle(
+                              fontSize: isLandscape ? 20 : 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          topic,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: isLandscape ? 13 : 15,
+                            fontWeight: FontWeight.w500,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWordsList(bool isDark, bool isLandscape) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Поиск по словам...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                icon: const Icon(Icons.clear),
+                onPressed: () => _searchController.clear(),
+              )
+                  : null,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              filled: true,
+              fillColor: isDark ? const Color(0xFF2D2D44) : Colors.grey.shade100,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Слов: ${_filteredWords.length}',
+                style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+              ),
+              Text(
+                _selectedTopic ?? '',
+                style: TextStyle(
+                  color: isDark ? Colors.blue.shade300 : Colors.blue.shade700,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: _buildWordsListView(isDark, isLandscape),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWordsListView(bool isDark, bool isLandscape) {
+    if (_filteredWords.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 64, color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text('Слов не найдено', style: TextStyle(fontSize: 16, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: _filteredWords.length,
+      itemBuilder: (context, index) {
+        final word = _filteredWords[index];
+        return Card(
+          color: isDark ? const Color(0xFF2D2D44) : Colors.white,
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: ListTile(
+            title: Text(word.word, style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+            subtitle: Text(word.translation, style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600)),
+            trailing: _selectedTopic == null
+                ? Chip(
+              label: Text(word.topic, style: const TextStyle(fontSize: 11)),
+              backgroundColor: isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50,
+            )
+                : null,
+          ),
+        );
+      },
     );
   }
 }
@@ -1615,6 +1603,7 @@ class _TrainerPageState extends State<TrainerPage> {
   final FocusNode _focusNode = FocusNode();
   int _correctAnswers = 0;
   int _totalAnswers = 0;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -1633,7 +1622,7 @@ class _TrainerPageState extends State<TrainerPage> {
     _topics = await _dbService.getTopics();
     setState(() {
       for (var topic in _topics) {
-        _selectedTopics[topic] = true;
+        _selectedTopics[topic] = false;
       }
 
       if (widget.selectedTopic != null && _topics.contains(widget.selectedTopic)) {
@@ -1643,6 +1632,7 @@ class _TrainerPageState extends State<TrainerPage> {
         _showTopicsPanel = false;
         _startTraining();
       }
+      _isLoading = false;
     });
   }
 
@@ -1658,14 +1648,26 @@ class _TrainerPageState extends State<TrainerPage> {
   }
 
   Future<void> _startTraining() async {
-    if (!hasSelectedTopics()) return;
+    final selectedTopicsList = getSelectedTopics();
+    if (selectedTopicsList.isEmpty) return;
 
-    List<String> selectedTopics = getSelectedTopics();
     List<Word> allWords = [];
 
-    for (var topic in selectedTopics) {
-      var words = await _dbService.getWordsForTraining(topic, limit: 30);
-      allWords.addAll(words.where((word) => word.language == _selectedLanguage));
+    for (var topic in selectedTopicsList) {
+      var words = await _dbService.getWordsByTopic(topic, language: _selectedLanguage);
+      allWords.addAll(words);
+    }
+
+    if (allWords.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Нет слов для выбранных тем и языка'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
     }
 
     allWords.shuffle();
@@ -1691,7 +1693,7 @@ class _TrainerPageState extends State<TrainerPage> {
     String userAnswer = _controller.text.trim().toLowerCase();
     String correctAnswer = _currentWord!.translation.toLowerCase();
 
-    bool isCorrect = userAnswer == correctAnswer;
+    bool isCorrect = isAnswerCorrect(userAnswer, correctAnswer);
 
     setState(() {
       _showTranslation = true;
@@ -1775,7 +1777,24 @@ class _TrainerPageState extends State<TrainerPage> {
         ],
       ),
       body: SafeArea(
-        child: isLandscape
+        child: _isLoading
+            ? Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                'Загружается база данных, подождите...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        )
+            : isLandscape
             ? _buildLandscapeLayout(context, isDark)
             : _buildPortraitLayout(context, isDark),
       ),
@@ -1806,7 +1825,7 @@ class _TrainerPageState extends State<TrainerPage> {
                       const SizedBox(height: 20),
                       Text(
                         _topics.isEmpty
-                            ? 'Нет доступных тем\nДобавьте слова в базу данных'
+                            ? 'Загружается база данных, подождите...'
                             : 'Выберите темы и начните тренировку',
                         style: TextStyle(
                           fontSize: 18,
@@ -1837,7 +1856,7 @@ class _TrainerPageState extends State<TrainerPage> {
       return _buildCompletionScreen(false, isDark);
     }
 
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         children: [
@@ -1992,10 +2011,11 @@ class _TrainerPageState extends State<TrainerPage> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 20), // Добавляем отступ снизу для клавиатуры
               ],
             ),
 
-          const Spacer(),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -2083,7 +2103,7 @@ class _TrainerPageState extends State<TrainerPage> {
           const SizedBox(height: 8),
           Text(
             _topics.isEmpty
-                ? 'Нет доступных тем\nДобавьте слова в базу данных'
+                ? 'Загружается база данных, подождите...'
                 : 'Выберите темы и начните тренировку',
             style: TextStyle(
               fontSize: 13,
@@ -2291,7 +2311,7 @@ class _TrainerPageState extends State<TrainerPage> {
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Text(
-            'Нет доступных тем\nДобавьте слова через words_data.dart',
+            'Загружается база данных, подождите...',
             style: TextStyle(
               fontSize: isLandscape ? 11 : 14,
               color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
@@ -2559,6 +2579,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
   bool _showTopicsPanel = true;
   int _correctAnswers = 0;
   int _totalAnswers = 0;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -2570,7 +2591,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
     _topics = await _dbService.getTopics();
     setState(() {
       for (var topic in _topics) {
-        _selectedTopics[topic] = true;
+        _selectedTopics[topic] = false;
       }
 
       if (widget.selectedTopic != null && _topics.contains(widget.selectedTopic)) {
@@ -2580,6 +2601,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
         _showTopicsPanel = false;
         _startTraining();
       }
+      _isLoading = false;
     });
   }
 
@@ -2772,7 +2794,24 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
         ],
       ),
       body: SafeArea(
-        child: isLandscape
+        child: _isLoading
+            ? Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                'Загружается база данных, подождите...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        )
+            : isLandscape
             ? _buildLandscapeLayout(context, isDark)
             : _buildPortraitLayout(context, isDark),
       ),
@@ -2803,7 +2842,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
                       const SizedBox(height: 20),
                       Text(
                         _topics.isEmpty
-                            ? 'Нет доступных тем\nДобавьте слова в базу данных'
+                            ? 'Загружается база данных, подождите...'
                             : 'Выберите темы и начните тренировку',
                         style: TextStyle(
                           fontSize: 18,
@@ -2834,7 +2873,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
       return _buildCompletionScreen(false, isDark);
     }
 
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         children: [
@@ -2926,49 +2965,45 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
 
           const SizedBox(height: 24),
 
-          Expanded(
-            child: ListView(
-              children: [
-                ..._options.map((option) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _buildOptionButton(option, false, isDark),
-                )),
+          ..._options.map((option) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildOptionButton(option, false, isDark),
+          )),
 
-                if (_showResult)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Column(
-                      children: [
-                        Text(
-                          _feedback,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: _isCorrect ? Colors.green : Colors.red,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _nextWord,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              backgroundColor: _isCorrect ? Colors.green : Colors.orange,
-                              foregroundColor: Colors.white,
-                            ),
-                            child: Text(
-                              _currentIndex < _trainingWords.length - 1 ? 'ДАЛЕЕ' : 'ЗАВЕРШИТЬ',
-                              style: const TextStyle(fontSize: 18, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                      ],
+          if (_showResult)
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 30),
+              child: Column(
+                children: [
+                  Text(
+                    _feedback,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: _isCorrect ? Colors.green : Colors.red,
                     ),
                   ),
-              ],
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _nextWord,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: _isCorrect ? Colors.green : Colors.orange,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: Text(
+                        _currentIndex < _trainingWords.length - 1 ? 'ДАЛЕЕ' : 'ЗАВЕРШИТЬ',
+                        style: const TextStyle(fontSize: 18, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -3056,7 +3091,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
           const SizedBox(height: 8),
           Text(
             _topics.isEmpty
-                ? 'Нет доступных тем\nДобавьте слова в базу данных'
+                ? 'Загружается база данных, подождите...'
                 : 'Выберите темы и начните тренировку',
             style: TextStyle(
               fontSize: 13,
@@ -3266,7 +3301,7 @@ class _MultipleChoicePageState extends State<MultipleChoicePage> {
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Text(
-            'Нет доступных тем\nДобавьте слова через words_data.dart',
+            'Загружается база данных, подождите...',
             style: TextStyle(
               fontSize: isLandscape ? 11 : 14,
               color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
@@ -3533,6 +3568,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
   int _correctAnswers = 0;
   int _totalAnswers = 0;
   final FocusNode _focusNode = FocusNode();
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -3551,7 +3587,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
     _topics = await _dbService.getTopics();
     setState(() {
       for (var topic in _topics) {
-        _selectedTopics[topic] = true;
+        _selectedTopics[topic] = false;
       }
 
       if (widget.selectedTopic != null && _topics.contains(widget.selectedTopic)) {
@@ -3561,6 +3597,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
         _showTopicsPanel = false;
         _startTraining();
       }
+      _isLoading = false;
     });
   }
 
@@ -3610,7 +3647,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
     String userAnswer = _controller.text.trim().toLowerCase();
     String correctAnswer = _currentWord!.word.toLowerCase();
 
-    bool isCorrect = userAnswer == correctAnswer;
+    bool isCorrect = isAnswerCorrect(userAnswer, correctAnswer);
 
     setState(() {
       _showAnswer = true;
@@ -3701,7 +3738,24 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
         ],
       ),
       body: SafeArea(
-        child: isLandscape
+        child: _isLoading
+            ? Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                'Загружается база данных, подождите...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        )
+            : isLandscape
             ? _buildLandscapeLayout(context, isDark)
             : _buildPortraitLayout(context, isDark),
       ),
@@ -3732,7 +3786,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                       const SizedBox(height: 20),
                       Text(
                         _topics.isEmpty
-                            ? 'Нет доступных тем\nДобавьте слова в базу данных'
+                            ? 'Загружается база данных, подождите...'
                             : 'Выберите темы и начните тренировку',
                         style: TextStyle(
                           fontSize: 18,
@@ -3763,7 +3817,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
       return _buildCompletionScreen(false, isDark);
     }
 
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         children: [
@@ -3919,10 +3973,11 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 20), // Добавляем отступ снизу
               ],
             ),
 
-          const Spacer(),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -4010,7 +4065,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
           const SizedBox(height: 8),
           Text(
             _topics.isEmpty
-                ? 'Нет доступных тем\nДобавьте слова в базу данных'
+                ? 'Загружается база данных, подождите...'
                 : 'Выберите темы и начните тренировку',
             style: TextStyle(
               fontSize: 13,
@@ -4218,7 +4273,7 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Text(
-            'Нет доступных тем\nДобавьте слова через words_data.dart',
+            'Загружается база данных, подождите...',
             style: TextStyle(
               fontSize: isLandscape ? 11 : 14,
               color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
@@ -4460,6 +4515,8 @@ class _ReverseTranslationPageState extends State<ReverseTranslationPage> {
 // СТРАНИЦА ПРОГРЕССА
 // ============================================================
 
+enum ProgressViewMode { full, compact }
+
 class ProgressPage extends StatefulWidget {
   const ProgressPage({super.key});
 
@@ -4475,6 +4532,7 @@ class _ProgressPageState extends State<ProgressPage> {
   final Map<String, Map<String, dynamic>> _topicStats = {};
   Map<String, dynamic> _overallStats = {};
   bool _isLoading = true;
+  ProgressViewMode _viewMode = ProgressViewMode.full;
 
   @override
   void initState() {
@@ -4889,6 +4947,18 @@ class _ProgressPageState extends State<ProgressPage> {
     }
   }
 
+  void _openTopicDetail(String topic) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TopicProgressPage(
+          topic: topic,
+          language: _selectedLanguage,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
@@ -4899,16 +4969,32 @@ class _ProgressPageState extends State<ProgressPage> {
       appBar: AppBar(
         title: const Text('ПРОГРЕСС'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.help_outline, color: Colors.blue),
-            onPressed: () => TutorialService.showProgressTutorial(context),
-            tooltip: 'Показать подсказку',
-          ),
+          if (_viewMode == ProgressViewMode.full)
+            IconButton(
+              icon: const Icon(Icons.help_outline, color: Colors.blue),
+              onPressed: () => TutorialService.showProgressTutorial(context),
+              tooltip: 'Показать подсказку',
+            ),
           IconButton(
             icon: const Icon(Icons.delete_sweep, color: Colors.red),
             onPressed: _resetAllProgress,
             tooltip: 'Сбросить весь прогресс',
           ),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildModeButton(ProgressViewMode.full, Icons.analytics_outlined, 'Детально'),
+                _buildModeButton(ProgressViewMode.compact, Icons.view_list_outlined, 'Кратко'),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
           DropdownButton<String>(
             value: _selectedLanguage,
             dropdownColor: isDark ? const Color(0xFF2D2D44) : Colors.white,
@@ -4925,13 +5011,55 @@ class _ProgressPageState extends State<ProgressPage> {
           const SizedBox(width: 8),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _buildContent(isLandscape, isDark),
+      body: SafeArea(
+        child: _isLoading
+            ? Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                'Загружается база данных, подождите...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        )
+            : _viewMode == ProgressViewMode.full
+            ? _buildFullContent(isLandscape, isDark)
+            : _buildCompactContent(isLandscape, isDark),
+      ),
     );
   }
 
-  Widget _buildContent(bool isLandscape, bool isDark) {
+  Widget _buildModeButton(ProgressViewMode mode, IconData icon, String tooltip) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSelected = _viewMode == mode;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => setState(() => _viewMode = mode),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: isSelected ? (isDark ? Colors.blue.shade800 : Colors.blue.shade200) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Tooltip(
+            message: tooltip,
+            child: Icon(icon, size: 20, color: isSelected ? Colors.white : isDark ? Colors.grey : Colors.black54),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFullContent(bool isLandscape, bool isDark) {
     final totalWords = _overallStats['totalWords'] ?? 0;
     final totalCorrect = _overallStats['totalCorrect'] ?? 0;
     final totalWrong = _overallStats['totalWrong'] ?? 0;
@@ -4976,24 +5104,9 @@ class _ProgressPageState extends State<ProgressPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildStatItem(
-                    '📚',
-                    '$totalWords',
-                    'всего слов',
-                    isLandscape,
-                  ),
-                  _buildStatItem(
-                    '✅',
-                    '$learnedWords',
-                    'изучено',
-                    isLandscape,
-                  ),
-                  _buildStatItem(
-                    '⚠️',
-                    '$hardWords',
-                    'сложных',
-                    isLandscape,
-                  ),
+                  _buildStatItem('📚', '$totalWords', 'всего слов', isLandscape),
+                  _buildStatItem('✅', '$learnedWords', 'изучено', isLandscape),
+                  _buildStatItem('⚠️', '$hardWords', 'сложных', isLandscape),
                 ],
               ),
               const SizedBox(height: 16),
@@ -5132,7 +5245,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Добавьте слова через words_data.dart',
+                    'Добавьте слова через словарные файлы',
                     style: TextStyle(fontSize: 14, color: isDark ? Colors.grey.shade500 : Colors.grey.shade500),
                   ),
                 ],
@@ -5145,10 +5258,125 @@ class _ProgressPageState extends State<ProgressPage> {
     );
   }
 
+  Widget _buildCompactContent(bool isLandscape, bool isDark) {
+    if (_topics.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.inbox, size: 64, color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
+              const SizedBox(height: 16),
+              Text(
+                'Нет доступных тем',
+                style: TextStyle(fontSize: 18, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Добавьте слова через словарные файлы',
+                style: TextStyle(fontSize: 14, color: isDark ? Colors.grey.shade500 : Colors.grey.shade500),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      padding: EdgeInsets.all(isLandscape ? 8 : 16),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: isLandscape ? 4 : 2,
+        childAspectRatio: isLandscape ? 2.2 : 1.8, // изменено для большего пространства
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: _topics.length,
+      itemBuilder: (context, index) {
+        final topic = _topics[index];
+        return Card(
+          color: isDark ? const Color(0xFF2D2D44) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: isDark ? Colors.grey.shade700 : Colors.grey.shade200,
+            ),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _openTopicDetail(topic),
+            child: Padding(
+              padding: EdgeInsets.all(isLandscape ? 8.0 : 12.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Название темы занимает всё доступное пространство
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        topic,
+                        textAlign: TextAlign.center,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: isLandscape ? 13 : 15,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Отступ перед кнопками
+                  SizedBox(height: isLandscape ? 6 : 10),
+                  // Кнопки в ряд с достаточным пространством
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      Tooltip(
+                        message: 'Повторить тему',
+                        child: InkWell(
+                          onTap: () => _showRepeatOptions(topic),
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: EdgeInsets.all(isLandscape ? 4 : 6),
+                            child: Icon(
+                              Icons.replay_circle_filled,
+                              color: Colors.blue,
+                              size: isLandscape ? 20 : 26,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Tooltip(
+                        message: 'Детали темы',
+                        child: InkWell(
+                          onTap: () => _openTopicDetail(topic),
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: EdgeInsets.all(isLandscape ? 4 : 6),
+                            child: Icon(
+                              Icons.info_outline,
+                              color: Colors.teal,
+                              size: isLandscape ? 20 : 26,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildStatItem(String icon, String value, String label, bool isLandscape) {
     return Column(
       children: [
-        Text(icon, style: const TextStyle(fontSize: 24)),
+        Text(icon, style: TextStyle(fontSize: isLandscape ? 20 : 24)),
         const SizedBox(height: 4),
         Text(
           value,
@@ -5183,17 +5411,7 @@ class _ProgressPageState extends State<ProgressPage> {
         : 0;
 
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => TopicProgressPage(
-              topic: topic,
-              language: _selectedLanguage,
-            ),
-          ),
-        );
-      },
+      onTap: () => _openTopicDetail(topic),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
@@ -5532,7 +5750,7 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
   @override
   Widget build(BuildContext context) {
     final totalWords = _words.length;
-    final learnedWords = _words.where((w) => w.difficulty < 0.3).length;
+    final learnedWords = _words.where((w) => w.correctCount >= 3).length;
     final totalCorrect = _words.fold<int>(0, (sum, w) => sum + w.correctCount);
     final totalWrong = _words.fold<int>(0, (sum, w) => sum + w.wrongCount);
     final progressPercent = totalWords > 0 ? (learnedWords / totalWords * 100) : 0;
@@ -5540,6 +5758,7 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
         ? (totalCorrect / (totalCorrect + totalWrong) * 100)
         : 0;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
 
     return Scaffold(
       appBar: AppBar(
@@ -5567,158 +5786,183 @@ class _TopicProgressPageState extends State<TopicProgressPage> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: isDark ? Colors.teal.withValues(alpha: 0.15) : Colors.teal.shade50,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildCompactStat('📚', '$totalWords', isDark),
-                _buildCompactStat('✅', '$learnedWords', isDark),
-                _buildCompactStat('📊', '${progressPercent.toStringAsFixed(0)}%', isDark),
-                _buildCompactStat('✓', '$totalCorrect', isDark),
-                _buildCompactStat('✗', '$totalWrong', isDark),
-                _buildCompactStat('🎯', '${accuracyPercent.toStringAsFixed(0)}%', isDark),
-              ],
-            ),
-          ),
-          Expanded(
-            child: _words.isEmpty
-                ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.search_off, size: 64, color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Нет слов в этой теме',
-                    style: TextStyle(fontSize: 18, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                  ),
-                ],
+      body: SafeArea(
+        child: _isLoading
+            ? Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                'Загружается база данных, подождите...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
               ),
-            )
-                : ListView.builder(
-              itemCount: _words.length,
-              itemBuilder: (context, index) {
-                final word = _words[index];
-                final totalAttempts = word.correctCount + word.wrongCount;
-                final accuracy = totalAttempts > 0
-                    ? (word.correctCount / totalAttempts * 100).round()
-                    : 0;
+            ],
+          ),
+        )
+            : Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: isDark ? Colors.teal.withValues(alpha: 0.15) : Colors.teal.shade50,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildCompactStat('📚', '$totalWords', isDark),
+                    const SizedBox(width: 16),
+                    _buildCompactStat('✅', '$learnedWords', isDark),
+                    const SizedBox(width: 16),
+                    _buildCompactStat('📊', '${progressPercent.toStringAsFixed(0)}%', isDark),
+                    const SizedBox(width: 16),
+                    _buildCompactStat('✓', '$totalCorrect', isDark),
+                    const SizedBox(width: 16),
+                    _buildCompactStat('✗', '$totalWrong', isDark),
+                    const SizedBox(width: 16),
+                    _buildCompactStat('🎯', '${accuracyPercent.toStringAsFixed(0)}%', isDark),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: _words.isEmpty
+                  ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.search_off, size: 64, color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Нет слов в этой теме',
+                      style: TextStyle(fontSize: 18, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                    ),
+                  ],
+                ),
+              )
+                  : ListView.builder(
+                itemCount: _words.length,
+                itemBuilder: (context, index) {
+                  final word = _words[index];
+                  final totalAttempts = word.correctCount + word.wrongCount;
+                  final accuracy = totalAttempts > 0
+                      ? (word.correctCount / totalAttempts * 100).round()
+                      : 0;
 
-                return Card(
-                  color: isDark ? const Color(0xFF2D2D44) : Colors.white,
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: _getDifficultyColor(word.difficulty).withValues(alpha: 0.2),
-                      child: Icon(
-                        _getMasteryIcon(word.difficulty),
-                        color: _getDifficultyColor(word.difficulty),
-                        size: 20,
+                  return Card(
+                    color: isDark ? const Color(0xFF2D2D44) : Colors.white,
+                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: _getDifficultyColor(word.difficulty).withValues(alpha: 0.2),
+                        child: Icon(
+                          _getMasteryIcon(word.difficulty),
+                          color: _getDifficultyColor(word.difficulty),
+                          size: 20,
+                        ),
                       ),
-                    ),
-                    title: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            word.word,
-                            style: TextStyle(fontWeight: FontWeight.w500, color: isDark ? Colors.white : Colors.black87),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: _getDifficultyColor(word.difficulty).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            _getDifficultyLevel(word.difficulty),
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: _getDifficultyColor(word.difficulty),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              word.word,
+                              style: TextStyle(fontWeight: FontWeight.w500, color: isDark ? Colors.white : Colors.black87),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          word.translation,
-                          style: TextStyle(fontSize: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.check_circle, size: 14, color: Colors.green.shade400),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${word.correctCount}',
-                              style: TextStyle(fontSize: 12, color: isDark ? Colors.green.shade300 : Colors.green.shade600),
-                            ),
-                            const SizedBox(width: 12),
-                            Icon(Icons.cancel, size: 14, color: Colors.red.shade400),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${word.wrongCount}',
-                              style: TextStyle(fontSize: 12, color: isDark ? Colors.red.shade300 : Colors.red.shade600),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Точность: $accuracy%',
-                              style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade500),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (word.streak != null && word.streak! > 0)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.amber.shade100,
+                              color: _getDifficultyColor(word.difficulty).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.local_fire_department, size: 14, color: Colors.amber),
-                                const SizedBox(width: 2),
-                                Text(
-                                  '${word.streak}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.amber.shade800,
-                                  ),
-                                ),
-                              ],
+                            child: Text(
+                              _getDifficultyLevel(word.difficulty),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: _getDifficultyColor(word.difficulty),
+                              ),
                             ),
                           ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
-                          onPressed: () => _resetWordProgress(word),
-                          tooltip: 'Сбросить прогресс слова',
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                        ),
-                      ],
+                        ],
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            word.translation,
+                            style: TextStyle(fontSize: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.check_circle, size: 14, color: Colors.green.shade400),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${word.correctCount}',
+                                style: TextStyle(fontSize: 12, color: isDark ? Colors.green.shade300 : Colors.green.shade600),
+                              ),
+                              const SizedBox(width: 12),
+                              Icon(Icons.cancel, size: 14, color: Colors.red.shade400),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${word.wrongCount}',
+                                style: TextStyle(fontSize: 12, color: isDark ? Colors.red.shade300 : Colors.red.shade600),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Точность: $accuracy%',
+                                style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade500),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (word.streak != null && word.streak! > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade100,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.local_fire_department, size: 14, color: Colors.amber),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '${word.streak}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.amber.shade800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                            onPressed: () => _resetWordProgress(word),
+                            tooltip: 'Сбросить прогресс слова',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

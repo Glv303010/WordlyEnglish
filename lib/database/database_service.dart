@@ -27,7 +27,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 4, // Новая версия для новой системы
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -46,7 +46,9 @@ class DatabaseService {
         difficulty REAL DEFAULT 0.5,
         lastReviewed TEXT,
         streak INTEGER DEFAULT 0,
-        nextReviewDate TEXT
+        nextReviewDate TEXT,
+        totalAttempts INTEGER DEFAULT 0,
+        masteryLevel INTEGER DEFAULT 0
       )
     ''');
 
@@ -57,19 +59,35 @@ class DatabaseService {
     if (oldVersion < 2) {
       try {
         await db.execute('ALTER TABLE words ADD COLUMN streak INTEGER DEFAULT 0');
-      } catch (e) {
-        // Колонка уже существует
-      }
+      } catch (e) {}
       try {
         await db.execute('ALTER TABLE words ADD COLUMN nextReviewDate TEXT');
-      } catch (e) {
-        // Колонка уже существует
-      }
+      } catch (e) {}
     }
+
+    // Добавляем новые колонки для улучшенной системы прогресса
+    try {
+      await db.execute('ALTER TABLE words ADD COLUMN totalAttempts INTEGER DEFAULT 0');
+    } catch (e) {}
+
+    try {
+      await db.execute('ALTER TABLE words ADD COLUMN masteryLevel INTEGER DEFAULT 0');
+    } catch (e) {}
+
+    // Обновляем существующие данные
+    await db.execute('''
+      UPDATE words 
+      SET totalAttempts = correctCount + wrongCount,
+          masteryLevel = CASE 
+            WHEN correctCount >= 10 THEN 3
+            WHEN correctCount >= 5 THEN 2
+            WHEN correctCount >= 2 THEN 1
+            ELSE 0
+          END
+    ''');
   }
 
   Future<void> _insertInitialData(Database db) async {
-    // Загружаем слова для всех языков
     await _insertWordsForLanguage(db, wordsEn, 'en');
     await _insertWordsForLanguage(db, wordsEs, 'es');
     await _insertWordsForLanguage(db, wordsDe, 'de');
@@ -78,7 +96,6 @@ class DatabaseService {
 
   Future<void> _insertWordsForLanguage(Database db, List<Map<String, dynamic>> words, String language) async {
     for (var word in words) {
-      // Добавляем язык к каждому слову перед вставкой
       final wordWithLang = Map<String, dynamic>.from(word);
       wordWithLang['language'] = language;
       await db.insert('words', wordWithLang);
@@ -125,18 +142,42 @@ class DatabaseService {
     Database db = await database;
     DateTime now = DateTime.now();
 
+    // Обновляем счетчики
+    word.totalAttempts = (word.totalAttempts ?? 0) + 1;
+
     if (isCorrect) {
       word.correctCount++;
-      word.difficulty = (word.difficulty - 0.1).clamp(0.0, 1.0);
       word.streak = (word.streak ?? 0) + 1;
+
+      // Быстрое изменение сложности
+      word.difficulty = (word.difficulty - 0.2).clamp(0.0, 1.0);
+
+      // Расчет уровня мастерства (0-3)
+      if (word.correctCount >= 10) {
+        word.masteryLevel = 3; // Отлично
+      } else if (word.correctCount >= 5) {
+        word.masteryLevel = 2; // Хорошо
+      } else if (word.correctCount >= 2) {
+        word.masteryLevel = 1; // Начальный
+      } else {
+        word.masteryLevel = 0; // Не изучено
+      }
 
       int daysToAdd = _calculateReviewInterval(word.streak ?? 0, word.difficulty);
       word.nextReviewDate = now.add(Duration(days: daysToAdd));
     } else {
       word.wrongCount++;
-      word.difficulty = (word.difficulty + 0.2).clamp(0.0, 1.0);
       word.streak = 0;
-      word.nextReviewDate = now.add(Duration(hours: 12));
+
+      // Быстрое увеличение сложности
+      word.difficulty = (word.difficulty + 0.3).clamp(0.0, 1.0);
+
+      // Понижаем уровень мастерства при ошибках
+      if (word.masteryLevel != null && word.masteryLevel! > 0) {
+        word.masteryLevel = word.masteryLevel! - 1;
+      }
+
+      word.nextReviewDate = now.add(Duration(hours: 4));
     }
 
     word.lastReviewed = now;
@@ -229,39 +270,115 @@ class DatabaseService {
     return List.generate(maps.length, (i) => Word.fromMap(maps[i]));
   }
 
+  // ============================================================
+  // НОВАЯ СИСТЕМА СТАТИСТИКИ
+  // ============================================================
+
   Future<Map<String, dynamic>> getOverallStatistics() async {
     Database db = await database;
 
-    final result = await db.rawQuery('''
+    // Получаем общую статистику
+    final totalStats = await db.rawQuery('''
       SELECT 
         COUNT(*) as totalWords,
-        SUM(correctCount) as totalCorrect,
-        SUM(wrongCount) as totalWrong,
-        AVG(difficulty) as avgDifficulty,
-        COUNT(CASE WHEN difficulty < 0.3 THEN 1 END) as learnedWords,
-        COUNT(CASE WHEN difficulty > 0.7 THEN 1 END) as hardWords
+        COALESCE(SUM(correctCount), 0) as totalCorrect,
+        COALESCE(SUM(wrongCount), 0) as totalWrong,
+        COALESCE(SUM(totalAttempts), 0) as totalAttempts
       FROM words
     ''');
 
-    return result.first;
+    // Считаем слова по уровням мастерства (более показательно)
+    final masteryStats = await db.rawQuery('''
+      SELECT 
+        COUNT(CASE WHEN masteryLevel >= 1 THEN 1 END) as learnedWords,
+        COUNT(CASE WHEN masteryLevel >= 2 THEN 1 END) as wellLearnedWords,
+        COUNT(CASE WHEN masteryLevel >= 3 THEN 1 END) as masteredWords,
+        COUNT(CASE WHEN difficulty >= 0.5 THEN 1 END) as hardWords,
+        COUNT(CASE WHEN difficulty >= 0.7 THEN 1 END) as veryHardWords,
+        COALESCE(AVG(difficulty), 0.5) as avgDifficulty
+      FROM words
+    ''');
+
+    // Объединяем результаты
+    final result = {
+      ...totalStats.first,
+      ...masteryStats.first,
+      // Используем базовый уровень изучения (masteryLevel >= 1)
+      'learnedWords': masteryStats.first['learnedWords'] ?? 0,
+    };
+
+    return result;
   }
 
   Future<Map<String, dynamic>> getTopicStatistics(String topic, String language) async {
     Database db = await database;
 
-    final result = await db.rawQuery('''
+    // Получаем статистику по теме
+    final totalStats = await db.rawQuery('''
       SELECT 
         COUNT(*) as totalWords,
-        SUM(correctCount) as totalCorrect,
-        SUM(wrongCount) as totalWrong,
-        AVG(difficulty) as avgDifficulty,
-        COUNT(CASE WHEN difficulty < 0.3 THEN 1 END) as learnedWords,
-        COUNT(CASE WHEN difficulty > 0.7 THEN 1 END) as hardWords
+        COALESCE(SUM(correctCount), 0) as totalCorrect,
+        COALESCE(SUM(wrongCount), 0) as totalWrong,
+        COALESCE(SUM(totalAttempts), 0) as totalAttempts
       FROM words
       WHERE topic = ? AND language = ?
     ''', [topic, language]);
 
-    return result.first;
+    // Считаем слова по уровням мастерства
+    final masteryStats = await db.rawQuery('''
+      SELECT 
+        COUNT(CASE WHEN masteryLevel >= 1 THEN 1 END) as learnedWords,
+        COUNT(CASE WHEN masteryLevel >= 2 THEN 1 END) as wellLearnedWords,
+        COUNT(CASE WHEN masteryLevel >= 3 THEN 1 END) as masteredWords,
+        COUNT(CASE WHEN difficulty >= 0.5 THEN 1 END) as hardWords,
+        COUNT(CASE WHEN difficulty >= 0.7 THEN 1 END) as veryHardWords,
+        COALESCE(AVG(difficulty), 0.5) as avgDifficulty
+      FROM words
+      WHERE topic = ? AND language = ?
+    ''', [topic, language]);
+
+    // Объединяем результаты
+    final result = {
+      ...totalStats.first,
+      ...masteryStats.first,
+      'learnedWords': masteryStats.first['learnedWords'] ?? 0,
+      'topic': topic,
+    };
+
+    return result;
+  }
+
+  // Получение детальной статистики для отображения
+  Future<Map<String, dynamic>> getDetailedStatistics() async {
+    final overall = await getOverallStatistics();
+
+    final totalWords = overall['totalWords'] ?? 0;
+    final learnedWords = overall['learnedWords'] ?? 0;
+    final masteredWords = overall['masteredWords'] ?? 0;
+    final totalCorrect = overall['totalCorrect'] ?? 0;
+    final totalWrong = overall['totalWrong'] ?? 0;
+    final totalAttempts = overall['totalAttempts'] ?? 0;
+    final avgDifficulty = overall['avgDifficulty'] ?? 0.5;
+
+    // Расчет процентов
+    final progressPercent = totalWords > 0 ? (learnedWords / totalWords * 100) : 0.0;
+    final masteryPercent = totalWords > 0 ? (masteredWords / totalWords * 100) : 0.0;
+    final accuracyPercent = totalAttempts > 0
+        ? (totalCorrect / totalAttempts * 100)
+        : 0.0;
+
+    return {
+      'totalWords': totalWords,
+      'learnedWords': learnedWords,
+      'masteredWords': masteredWords,
+      'totalCorrect': totalCorrect,
+      'totalWrong': totalWrong,
+      'totalAttempts': totalAttempts,
+      'avgDifficulty': avgDifficulty,
+      'progressPercent': progressPercent,
+      'masteryPercent': masteryPercent,
+      'accuracyPercent': accuracyPercent,
+    };
   }
 
   Future<List<Word>> getWordsByLanguage(String language) async {
@@ -325,6 +442,8 @@ class DatabaseService {
         'lastReviewed': null,
         'streak': 0,
         'nextReviewDate': null,
+        'totalAttempts': 0,
+        'masteryLevel': 0,
       },
     );
   }
