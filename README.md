@@ -50,7 +50,7 @@
 ## 📥 Установка
 
 ### Для пользователей
-1. Скачайте APK файл из [релизов](https://github.com/Glv303010/WordlyEnglish/releases/edit/mobileapp)
+1. Скачайте APK файл из [релизов](https://github.com/Glv303010/WordlyEnglish/releases)
 2. Установите приложение на Android устройство
 3. Разрешите установку из неизвестных источников (если требуется)
 
